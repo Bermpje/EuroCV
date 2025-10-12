@@ -1,0 +1,35 @@
+# Development Dockerfile with hot-reload support
+FROM python:3.11-slim
+
+# Install dependencies including Tesseract for OCR
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-nld \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements and install
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Copy source code
+COPY src/ /app/src/
+COPY pyproject.toml README.md ./
+
+# Install in editable mode
+RUN pip install -e .
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /data
+
+ENTRYPOINT ["eurocv"]
+CMD ["--help"]
+

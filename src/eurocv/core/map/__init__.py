@@ -1,0 +1,2 @@
+"""Europass mapping functionality."""
+

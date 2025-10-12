@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # CLI service for batch processing
+  eurocv-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eurocv:latest
+    container_name: eurocv-cli
+    volumes:
+      - ./data:/data
+    command: --help
+    profiles:
+      - cli
+
+  # API service
+  eurocv-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eurocv:latest
+    container_name: eurocv-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    command: serve --host 0.0.0.0 --port 8000
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    profiles:
+      - api
+
+  # Development service with auto-reload
+  eurocv-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: eurocv:dev
+    container_name: eurocv-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./data:/data
+    command: serve --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles:
+      - dev
+

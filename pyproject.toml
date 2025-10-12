@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eurocv"
+version = "0.1.0"
+description = "Convert resumes (PDF/DOCX) to Europass XML/JSON format"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Emiel Kremers"}
+]
+keywords = ["europass", "cv", "resume", "converter", "pdf", "docx"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: General",
+]
+
+dependencies = [
+    "pydantic>=2.0.0",
+    "pymupdf>=1.23.0",
+    "python-docx>=1.1.0",
+    "pdfminer.six>=20221105",
+    "typer[all]>=0.9.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "python-multipart>=0.0.6",
+    "xmltodict>=0.13.0",
+    "lxml>=4.9.0",
+    "python-dateutil>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "httpx>=0.25.0",
+]
+
+ocr = [
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+]
+
+[project.scripts]
+eurocv = "eurocv.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/emiel/eurocv"
+Repository = "https://github.com/emiel/eurocv"
+Issues = "https://github.com/emiel/eurocv/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+eurocv = ["schemas/*.json", "schemas/*.xsd"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=eurocv --cov-report=term-missing"
+
