@@ -1,59 +1,69 @@
 """PDF extraction functionality."""
 
 import re
+from datetime import date
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Optional
+
 import fitz  # PyMuPDF
 from pdfminer.high_level import extract_text as pdfminer_extract_text
 from pdfminer.layout import LAParams
 
-from eurocv.core.models import Resume, PersonalInfo, WorkExperience, Education, Language, Skill, Certification
+from eurocv.core.models import (
+    Certification,
+    Education,
+    Language,
+    PersonalInfo,
+    Resume,
+    Skill,
+    WorkExperience,
+)
 
 
 class PDFExtractor:
     """Extract text and structure from PDF files."""
-    
+
     def __init__(self, use_ocr: bool = False):
         """Initialize extractor.
-        
+
         Args:
             use_ocr: Whether to use OCR for scanned PDFs (requires pytesseract)
         """
         self.use_ocr = use_ocr
-    
+
     def extract(self, file_path: str) -> Resume:
         """Extract resume data from PDF.
-        
+
         Args:
             file_path: Path to PDF file
-            
+
         Returns:
             Resume object with extracted data
         """
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {file_path}")
-        
+
         # Try PyMuPDF first (better for most PDFs)
         try:
             text, metadata = self._extract_with_pymupdf(str(path))
         except Exception:
             # Fallback to pdfminer.six
             text, metadata = self._extract_with_pdfminer(str(path))
-        
+
         # Parse the extracted text into structured data
         resume = self._parse_text_to_resume(text, metadata)
         resume.raw_text = text
         resume.metadata.update(metadata)
-        
+
         return resume
-    
-    def _extract_with_pymupdf(self, file_path: str) -> tuple[str, Dict[str, Any]]:
+
+    def _extract_with_pymupdf(self, file_path: str) -> tuple[str, dict[str, Any]]:
         """Extract text using PyMuPDF.
-        
+
         Args:
             file_path: Path to PDF file
-            
+
         Returns:
             Tuple of (text content, metadata dict)
         """
@@ -64,7 +74,7 @@ class PDFExtractor:
             "format": "PDF",
             "extractor": "pymupdf",
         }
-        
+
         # Extract metadata
         if doc.metadata:
             metadata.update({
@@ -73,28 +83,28 @@ class PDFExtractor:
                 "subject": doc.metadata.get("subject"),
                 "keywords": doc.metadata.get("keywords"),
             })
-        
+
         # Extract text from each page
         for page_num, page in enumerate(doc, 1):
             # Check if page is likely scanned (no text)
             page_text = page.get_text()
-            
+
             if not page_text.strip() and self.use_ocr:
                 # Use OCR for scanned pages
                 page_text = self._ocr_page(page)
-            
+
             text_parts.append(page_text)
-        
+
         doc.close()
-        
+
         return "\n\n".join(text_parts), metadata
-    
-    def _extract_with_pdfminer(self, file_path: str) -> tuple[str, Dict[str, Any]]:
+
+    def _extract_with_pdfminer(self, file_path: str) -> tuple[str, dict[str, Any]]:
         """Extract text using pdfminer.six.
-        
+
         Args:
             file_path: Path to PDF file
-            
+
         Returns:
             Tuple of (text content, metadata dict)
         """
@@ -104,138 +114,139 @@ class PDFExtractor:
             char_margin=2.0,
             boxes_flow=0.5,
         )
-        
+
         text = pdfminer_extract_text(file_path, laparams=laparams)
-        
+
         metadata = {
             "format": "PDF",
             "extractor": "pdfminer",
         }
-        
+
         return text, metadata
-    
+
     def _ocr_page(self, page: fitz.Page) -> str:
         """OCR a page using Tesseract.
-        
+
         Args:
             page: PyMuPDF page object
-            
+
         Returns:
             Extracted text
         """
         try:
+            import io
+
             import pytesseract
             from PIL import Image
-            import io
-            
+
             # Convert page to image
             pix = page.get_pixmap(dpi=300)
             img_data = pix.tobytes("png")
             img = Image.open(io.BytesIO(img_data))
-            
+
             # Run OCR
             text = pytesseract.image_to_string(img, lang='eng+nld')
             return text
         except ImportError:
             # OCR dependencies not installed
             return ""
-    
-    def _parse_text_to_resume(self, text: str, metadata: Dict[str, Any]) -> Resume:
+
+    def _parse_text_to_resume(self, text: str, metadata: dict[str, Any]) -> Resume:
         """Parse extracted text into structured Resume.
-        
+
         This is a heuristic-based parser. For better results, consider:
         - Training a custom NER model
         - Using a pre-trained model for resume parsing
         - Implementing layout analysis
-        
+
         Args:
             text: Extracted text
             metadata: Document metadata
-            
+
         Returns:
             Resume object
         """
         resume = Resume()
-        
+
         # Extract personal info
         resume.personal_info = self._extract_personal_info(text)
-        
+
         # Extract sections
         sections = self._split_into_sections(text)
-        
+
         # Extract work experience
         if "experience" in sections or "work" in sections:
             work_section = sections.get("experience") or sections.get("work", "")
             resume.work_experience = self._extract_work_experience(work_section)
-        
+
         # Extract education
         if "education" in sections:
             resume.education = self._extract_education(sections["education"])
-        
+
         # Extract languages (check section first, then full text)
         if "language" in sections:
             resume.languages = self._extract_languages(sections["language"])
         else:
             # Try extracting from full text (languages might be in sidebar)
             resume.languages = self._extract_languages(text)
-        
+
         # Extract skills
         if "skill" in sections:
             resume.skills = self._extract_skills(sections["skill"])
-        
+
         # Extract certifications
         if "certification" in sections:
             resume.certifications = self._extract_certifications(sections["certification"])
-        
+
         # Extract summary
         if "summary" in sections or "profile" in sections:
             resume.summary = sections.get("summary") or sections.get("profile")
-        
+
         return resume
-    
+
     def _extract_personal_info(self, text: str) -> PersonalInfo:
         """Extract personal information from text.
-        
+
         Args:
             text: Resume text
-            
+
         Returns:
             PersonalInfo object
         """
         info = PersonalInfo()
-        
+
         # Extract email
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         email_matches = re.findall(email_pattern, text)
         if email_matches:
             info.email = email_matches[0]
-        
+
         # Extract phone
         phone_pattern = r'[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}'
         phone_matches = re.findall(phone_pattern, text[:500])  # Look in first 500 chars
         if phone_matches:
             info.phone = phone_matches[0]
-        
+
         # Extract name (improved heuristic)
         info.first_name, info.last_name = self._extract_name(text)
-        
+
         # Extract location from header
         info.city, info.country = self._extract_location_from_header(text)
-        
+
         return info
-    
+
     def _extract_name(self, text: str) -> tuple[str, str]:
         """Extract person name from text using improved heuristics.
-        
+
         Args:
             text: Resume text
-            
+
         Returns:
             Tuple of (first_name, last_name)
         """
         lines = text.split('\n')
         candidates = []
-        
+
         # Common sidebar headings and phrases to skip
         sidebar_headings = [
             'contact', 'top skills', 'skills', 'languages', 'certifications',
@@ -243,18 +254,18 @@ class PDFExtractor:
             'expertise', 'competencies', 'about', 'honors', 'awards',
             'other languages', 'spoken english', 'native or', 'limited working'
         ]
-        
+
         for i, line in enumerate(lines[:30]):  # Check first 30 lines
             line = line.strip()
-            
+
             # Skip empty lines
             if not line:
                 continue
-            
+
             # Skip common section headings
             if line.lower() in sidebar_headings:
                 continue
-            
+
             # Skip lines with URLs or common non-name patterns
             skip_patterns = [
                 r'www\.',
@@ -270,90 +281,90 @@ class PDFExtractor:
                 r'&',       # Ampersands (often in titles)
                 r'\|',      # Pipes (often in titles)
             ]
-            
+
             if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
                 continue
-            
+
             # Check if line looks like a name
             words = line.split()
-            
+
             # Name should be exactly 2-3 words, each capitalized
             if 2 <= len(words) <= 3:
                 # Check if all words are title case and mostly alpha
-                if all(word[0].isupper() and word.replace('-', '').replace("'", '').isalpha() 
+                if all(word[0].isupper() and word.replace('-', '').replace("'", '').isalpha()
                        for word in words if word):
                     # Calculate a score for this candidate
                     score = 0
-                    
+
                     # Strongly prefer exactly 2 words (First Last)
                     if len(words) == 2:
                         score += 10
                     elif len(words) == 3:
                         score += 5
-                    
+
                     # Prefer short words (first and last names are usually short)
                     if all(3 <= len(word) <= 15 for word in words):
                         score += 5
-                    
+
                     # Prefer lines that are standalone (not too much around them)
                     if len(line) < 30:
                         score += 3
-                    
+
                     # STRONGLY prefer lines 20-25 (typical name position in LinkedIn)
                     if 20 <= i <= 25:
                         score += 20  # Strong bonus for likely name position
                     elif i >= 15:
                         score += 4  # Prefer middle section
-                    
+
                     # Check if words look like common first names (heuristic: ends with common suffixes)
                     first_word = words[0]
                     # Common name endings
                     if any(first_word.endswith(suffix) for suffix in ['el', 'an', 'en', 'on', 'er', 'le', 'ie']):
                         score += 2
-                    
+
                     candidates.append((score, words, i, line))
-        
+
         # Sort by score and pick best candidate
         if candidates:
             candidates.sort(reverse=True)
             best_words = candidates[0][1]
-            
+
             first_name = best_words[0]
             last_name = ' '.join(best_words[1:])
             return first_name, last_name
-        
+
         return None, None
-    
+
     def _extract_location_from_header(self, text: str) -> tuple[str, str]:
         """Extract location (city, country) from resume header.
-        
+
         Args:
             text: Resume text
-            
+
         Returns:
             Tuple of (city, country)
         """
         # Common location patterns in headers
         # Format: "City, Region, Country" or "City, Country"
         lines = text.split('\n')
-        
+
         # Check first 50 lines for location patterns
         for line in lines[:50]:
             line = line.strip()
-            
+
             # Skip empty lines and URLs
             if not line or 'http' in line.lower() or '@' in line:
                 continue
-            
+
             # Look for lines with comma-separated location info
             if ',' in line:
                 # Common country names and variations
                 countries = [
-                    'Netherlands', 'Holland', 'Germany', 'Belgium', 'France', 
+                    'Netherlands', 'Holland', 'Germany', 'Belgium', 'France',
                     'United Kingdom', 'UK', 'United States', 'USA', 'Spain',
                     'Italy', 'Portugal', 'Poland', 'Sweden', 'Denmark'
                 ]
-                
+
                 # Check if any country is mentioned
                 for country in countries:
                     if country.lower() in line.lower():
@@ -364,20 +375,20 @@ class PDFExtractor:
                             # Verify city looks reasonable (not too long, not just numbers)
                             if len(city) > 2 and len(city) < 30 and not city.isdigit():
                                 return city, country
-        
+
         return None, None
-    
-    def _split_into_sections(self, text: str) -> Dict[str, str]:
+
+    def _split_into_sections(self, text: str) -> dict[str, str]:
         """Split resume text into sections.
-        
+
         Args:
             text: Resume text
-            
+
         Returns:
             Dict mapping section names to content
         """
         sections = {}
-        
+
         # Common section headers
         section_patterns = {
             "summary": r"(?i)(professional\s+summary|profile|summary|objective)",
@@ -387,7 +398,7 @@ class PDFExtractor:
             "language": r"(?i)(languages|language\s+skills)",
             "certification": r"(?i)(certifications?|licenses?|credentials?)",
         }
-        
+
         # Find section positions (use FIRST match of each section only)
         section_positions = []
         found_sections = set()
@@ -398,10 +409,10 @@ class PDFExtractor:
                 match = matches[0]
                 section_positions.append((match.start(), section_key, match.group()))
                 found_sections.add(section_key)
-        
+
         # Sort by position
         section_positions.sort()
-        
+
         # Extract section content
         for i, (start, key, header) in enumerate(section_positions):
             # Find end of section (next section or end of text)
@@ -409,33 +420,33 @@ class PDFExtractor:
                 end = section_positions[i + 1][0]
             else:
                 end = len(text)
-            
+
             content = text[start:end].strip()
             # Remove the header line
             content = re.sub(f"^{re.escape(header)}", "", content, flags=re.IGNORECASE).strip()
-            
+
             sections[key] = content
-        
+
         return sections
-    
-    def _extract_work_experience(self, text: str) -> List[WorkExperience]:
+
+    def _extract_work_experience(self, text: str) -> list[WorkExperience]:
         """Extract work experience entries.
-        
+
         Args:
             text: Work experience section text
-            
+
         Returns:
             List of WorkExperience objects
         """
         experiences = []
-        
+
         # Split text into potential entries by looking for date ranges
         # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
         # More strict: require either full month name or standard abbreviation
         date_range_pattern = r'((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)'
-        
+
         entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
-        
+
         # Process entries
         i = 0
         while i < len(entries):
@@ -444,19 +455,19 @@ class PDFExtractor:
                 before_text = entries[i].strip()
                 start_date_str = entries[i + 1].strip() if i + 1 < len(entries) else None
                 end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
-                
+
                 # Get the content after the dates (description)
                 content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
-                
+
                 if start_date_str and end_date_str:
                     # Validate this looks like a real work entry (not a random date in description)
                     # Must have some text before the dates (at least a position title)
                     if len(before_text.strip()) < 10:
                         i += 4
                         continue
-                    
+
                     exp = WorkExperience()
-                    
+
                     # Parse dates
                     exp.start_date = self._parse_date(start_date_str)
                     if end_date_str.lower() == 'present':
@@ -464,14 +475,14 @@ class PDFExtractor:
                         exp.end_date = None
                     else:
                         exp.end_date = self._parse_date(end_date_str)
-                    
+
                     # Extract position and employer from text before dates
                     # LinkedIn format: Company / Duration / Position / Date
-                    lines_before = [l.strip() for l in before_text.split('\n') if l.strip()]
+                    lines_before = [line.strip() for line in before_text.split('\n') if line.strip()]
                     if lines_before:
                         # Last non-empty line before dates is usually the position
                         exp.position = lines_before[-1] if lines_before else None
-                        
+
                         # Find the employer (company name)
                         # It's typically the FIRST line, or a line that doesn't look like duration/position
                         if len(lines_before) >= 3:
@@ -483,10 +494,12 @@ class PDFExtractor:
                             if not re.search(r'\d+\s+(year|month|day)', potential_employer, re.IGNORECASE) \
                                and not re.search(r'page\s+\d+', potential_employer, re.IGNORECASE):
                                 exp.employer = potential_employer
-                    
+
                     # Extract location and description from content after dates
-                    content_lines = [l.strip() for l in content_after.split('\n')[:20] if l.strip()]
-                    
+                    content_lines = [
+                        line.strip() for line in content_after.split('\n')[:20] if line.strip()
+                    ]
+
                     # First line after dates often contains location
                     if content_lines:
                         first_line = content_lines[0]
@@ -497,115 +510,116 @@ class PDFExtractor:
                                 exp.city = location_parts[0].strip()
                                 exp.country = location_parts[-1].strip()
                             content_lines = content_lines[1:]  # Remove location from description
-                    
+
                     # Remaining lines are description/activities
                     if content_lines:
                         exp.description = '\n'.join(content_lines[:10])  # Limit to first 10 lines
-                    
+
                     experiences.append(exp)
                     i += 4  # Skip the processed parts
                     continue
-            
+
             i += 1
-        
+
         # Fallback: if no structured entries found, create one with all text
         if not experiences and text.strip():
             exp = WorkExperience(description=text.strip()[:1000])
             experiences.append(exp)
-        
+
         return experiences
-    
-    def _parse_date(self, date_str: str) -> Optional['date']:
+
+    def _parse_date(self, date_str: str) -> Optional[date]:
         """Parse date string to date object.
-        
+
         Args:
             date_str: Date string like "January 2020" or "Jan 2020"
-            
+
         Returns:
             date object or None
         """
         from datetime import datetime
+
         from dateutil import parser
-        
+
         try:
             # Try to parse with dateutil
             parsed = parser.parse(date_str, default=datetime(2000, 1, 1))
             return parsed.date()
-        except:
+        except Exception:
             # Try to extract at least year and month
             year_match = re.search(r'\b(19|20)\d{2}\b', date_str)
             if year_match:
                 year = int(year_match.group())
-                
+
                 month_names = {
                     'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
                     'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
                 }
-                
+
                 for month_name, month_num in month_names.items():
                     if month_name in date_str.lower():
                         from datetime import date as date_class
                         return date_class(year, month_num, 1)
-                
+
                 # Just year
                 from datetime import date as date_class
                 return date_class(year, 1, 1)
-        
+
         return None
-    
-    def _extract_education(self, text: str) -> List[Education]:
+
+    def _extract_education(self, text: str) -> list[Education]:
         """Extract education entries.
-        
+
         Args:
             text: Education section text
-            
+
         Returns:
             List of Education objects
         """
         education_list = []
-        
+
         # Common university/school keywords
         institution_keywords = [
             'university', 'universiteit', 'college', 'school', 'hogeschool',
             'institute', 'academy', 'polytechnic'
         ]
-        
+
         # Split by lines and look for institution names
         lines = text.split('\n')
         current_edu = None
         current_lines = []
-        
+
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
                 continue
-            
+
             # Check if line contains an institution name
             is_institution = any(keyword in line_stripped.lower() for keyword in institution_keywords)
-            
+
             # Check if line contains a degree pattern
             degree_patterns = [
                 r"bachelor", r"master", r"phd", r"doctorate",
                 r"degree", r"msc", r"bsc", r"ma", r"ba", r"mba"
             ]
             has_degree = any(re.search(pattern, line_stripped, re.IGNORECASE) for pattern in degree_patterns)
-            
+
             # Start new entry if we find an institution or degree
             if is_institution or (has_degree and not current_edu):
                 # Save previous entry if exists
                 if current_edu and current_lines:
                     current_edu.description = '\n'.join(current_lines[:10])
                     education_list.append(current_edu)
-                
+
                 # Start new entry
                 current_edu = Education()
                 current_lines = []
-                
+
                 if is_institution:
                     current_edu.organization = line_stripped
                 elif has_degree:
                     current_edu.title = line_stripped
-            
+
             # Accumulate lines for current entry
             if current_edu:
                 # Try to extract dates from this line
@@ -622,43 +636,43 @@ class PDFExtractor:
                     if not current_edu.end_date:
                         from datetime import date as date_class
                         current_edu.end_date = date_class(year, 6, 30)
-                
+
                 # Check for degree in line if title not set
                 if not current_edu.title and has_degree:
                     current_edu.title = line_stripped
-                
+
                 current_lines.append(line_stripped)
-        
+
         # Don't forget last entry
         if current_edu:
             if current_lines:
                 current_edu.description = '\n'.join(current_lines[:10])
             education_list.append(current_edu)
-        
+
         # Fallback: if no structured entries found, create one with all text
         if not education_list and text.strip():
             edu = Education(description=text.strip()[:1000])
             education_list.append(edu)
-        
+
         return education_list
-    
-    def _extract_languages(self, text: str) -> List[Language]:
+
+    def _extract_languages(self, text: str) -> list[Language]:
         """Extract language skills.
-        
+
         Args:
             text: Language section text
-            
+
         Returns:
             List of Language objects
         """
         languages = []
-        
+
         # Common languages
         language_names = [
             "English", "Dutch", "German", "French", "Spanish", "Italian",
             "Portuguese", "Chinese", "Japanese", "Russian", "Arabic", "Nederlands"
         ]
-        
+
         # Proficiency level mappings to CEFR
         proficiency_map = {
             'native': 'C2',
@@ -674,19 +688,19 @@ class PDFExtractor:
             'professional working': 'B2',
             'limited working': 'B1',
         }
-        
+
         # CEFR levels
         cefr_pattern = r'\b([A-C][1-2])\b'
-        
+
         for lang in language_names:
             if re.search(rf'\b{lang}\b', text, re.IGNORECASE):
                 language = Language(language=lang)
-                
+
                 # Find context around the language name (100 chars before and after)
                 lang_pos = text.lower().find(lang.lower())
                 if lang_pos >= 0:
                     context = text[max(0, lang_pos - 100):lang_pos + 150]
-                    
+
                     # Try to find CEFR level
                     cefr_match = re.search(cefr_pattern, context)
                     if cefr_match:
@@ -704,96 +718,96 @@ class PDFExtractor:
                                 language.speaking = cefr_level
                                 language.writing = cefr_level
                                 break
-                
+
                 languages.append(language)
-        
+
         return languages
-    
-    def _extract_skills(self, text: str) -> List[Skill]:
+
+    def _extract_skills(self, text: str) -> list[Skill]:
         """Extract skills with improved categorization.
-        
+
         Args:
             text: Skills section text
-            
+
         Returns:
             List of Skill objects
         """
         skills = []
         seen_skills = set()  # Track duplicates
-        
+
         # Split by common delimiters
         skill_items = re.split(r'[,•\n·]', text)
-        
+
         # Noise words to skip (common resume fluff)
         noise_words = {
             'skills', 'experience', 'proficient', 'knowledge', 'familiar',
             'and', 'or', 'including', 'such as', 'etc', 'years', 'page'
         }
-        
+
         for item in skill_items:
             item = item.strip()
-            
+
             # Basic validation
             if not item or len(item) < 2 or len(item) > 50:
                 continue
-            
+
             # Skip if it's just numbers or dates
             if re.match(r'^[\d\s\-/]+$', item):
                 continue
-            
+
             # Skip noise words
             if item.lower() in noise_words:
                 continue
-            
+
             # Skip if contains too many numbers (likely not a skill name)
             if sum(c.isdigit() for c in item) > len(item) // 2:
                 continue
-            
+
             # Normalize for duplicate detection (lowercase, remove spaces)
             normalized = item.lower().replace(' ', '')
             if normalized in seen_skills:
                 continue
-            
+
             seen_skills.add(normalized)
             skill = Skill(name=item)
             skills.append(skill)
-        
+
         return skills
-    
-    def _extract_certifications(self, text: str) -> List[Certification]:
+
+    def _extract_certifications(self, text: str) -> list[Certification]:
         """Extract certifications.
-        
+
         Args:
             text: Certifications section text
-            
+
         Returns:
             List of Certification objects
         """
         certifications = []
         lines = text.split('\n')
-        
+
         for line in lines:
             line = line.strip()
-            
+
             # Skip empty lines, page numbers, section headers
             if not line or len(line) < 5:
                 continue
             if re.search(r'page\s+\d+|certifications?|licenses?', line, re.IGNORECASE):
                 continue
-            
+
             # Check if line looks like a certification
             # Usually certification lines have capital letters or known cert names
             if any(word in line for word in ['Certified', 'Foundation', 'Professional', 'AWS', 'Azure', 'Microsoft']):
                 cert = Certification(name=line)
-                
+
                 # Try to extract date from the line
                 year_match = re.search(r'\b(20\d{2})\b', line)
                 if year_match:
                     year = int(year_match.group(1))
                     from datetime import date as date_class
                     cert.date = date_class(year, 1, 1)
-                
+
                 certifications.append(cert)
-        
+
         return certifications
 
