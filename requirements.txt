@@ -1,5 +1,6 @@
 # Core dependencies
 pydantic>=2.0.0
+email-validator>=2.0.0
 pymupdf>=1.23.0
 python-docx>=1.1.0
 pdfminer.six>=20221105
@@ -11,3 +12,6 @@ xmltodict>=0.13.0
 lxml>=4.9.0
 python-dateutil>=2.8.0
 
+# OCR dependencies (for Docker)
+pytesseract>=0.3.10
+pillow>=10.0.0
