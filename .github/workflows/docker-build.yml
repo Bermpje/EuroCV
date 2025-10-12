@@ -58,8 +58,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true  # Temporarily disabled cache to ensure email-validator is installed
           platforms: linux/amd64,linux/arm64
 
       - name: Test image
@@ -67,4 +66,3 @@ jobs:
         run: |
           IMAGE_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest --version
-
