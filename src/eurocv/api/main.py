@@ -24,14 +24,13 @@ app = FastAPI(
 
 class ConvertRequest(BaseModel):
     """Convert request parameters."""
+    model_config = ConfigDict(populate_by_name=True)
     
     locale: str = "en-US"
     include_photo: bool = True
     output_format: Literal["json", "xml", "both"] = "json"
     use_ocr: bool = False
-    validate: bool = True
-
-    model_config = ConfigDict(populate_by_name=True)
+    validate: bool = True  # type: ignore[assignment]
 
 
 class ConvertResponse(BaseModel):
@@ -120,6 +119,9 @@ async def convert(
             detail=f"Invalid output_format: {output_format}. Must be: json, xml, or both",
         )
 
+    # Type-cast output_format after validation
+    validated_format: Literal["json", "xml", "both"] = output_format  # type: ignore[assignment]
+
     # Save uploaded file to temporary location
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
@@ -132,7 +134,7 @@ async def convert(
             tmp_path,
             locale=locale,
             include_photo=include_photo,
-            output_format=output_format,
+            output_format=validated_format,
             use_ocr=use_ocr,
             validate=validate,
         )

@@ -7,7 +7,7 @@ from typing import Any
 class SchemaValidator:
     """Validate Europass JSON/XML against official schemas."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize validator."""
         self.schema_dir = Path(__file__).parent.parent.parent / "schemas"
 

@@ -101,7 +101,7 @@ class EuropassMapper:
 
         # Address
         if any([pi.address, pi.city, pi.postal_code, pi.country]):
-            address = {"Contact": {}}
+            address: dict[str, Any] = {"Contact": {}}
             address_line = []
             if pi.address:
                 address_line.append(pi.address)
@@ -140,7 +140,7 @@ class EuropassMapper:
             }
 
         if pi.nationality:
-            demographics["Nationality"] = [{"Code": pi.nationality, "Label": pi.nationality}]
+            demographics["Nationality"] = [{"Code": pi.nationality, "Label": pi.nationality}]  # type: ignore[assignment]
 
         if demographics:
             identification["Demographics"] = demographics
