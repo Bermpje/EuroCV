@@ -7,7 +7,7 @@ import fitz  # PyMuPDF
 from pdfminer.high_level import extract_text as pdfminer_extract_text
 from pdfminer.layout import LAParams
 
-from eurocv.core.models import Resume, PersonalInfo, WorkExperience, Education, Language, Skill
+from eurocv.core.models import Resume, PersonalInfo, WorkExperience, Education, Language, Skill, Certification
 
 
 class PDFExtractor:
@@ -182,6 +182,10 @@ class PDFExtractor:
         # Extract skills
         if "skill" in sections:
             resume.skills = self._extract_skills(sections["skill"])
+        
+        # Extract certifications
+        if "certification" in sections:
+            resume.certifications = self._extract_certifications(sections["certification"])
         
         # Extract summary
         if "summary" in sections or "profile" in sections:
