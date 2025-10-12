@@ -75,10 +75,12 @@ pip-delete-this-directory.txt
 *.swo
 *~
 
-# Test outputs
+# Test outputs and output directories
 test_output/
 output/
+out/
 temp/
+results/
 
 # Env files
 .env
