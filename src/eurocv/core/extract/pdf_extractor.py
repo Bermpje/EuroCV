@@ -77,12 +77,14 @@ class PDFExtractor:
 
         # Extract metadata
         if doc.metadata:
-            metadata.update({
-                "title": doc.metadata.get("title"),
-                "author": doc.metadata.get("author"),
-                "subject": doc.metadata.get("subject"),
-                "keywords": doc.metadata.get("keywords"),
-            })
+            metadata.update(
+                {
+                    "title": doc.metadata.get("title"),
+                    "author": doc.metadata.get("author"),
+                    "subject": doc.metadata.get("subject"),
+                    "keywords": doc.metadata.get("keywords"),
+                }
+            )
 
         # Extract text from each page
         for page_num, page in enumerate(doc, 1):
@@ -145,7 +147,7 @@ class PDFExtractor:
             img = Image.open(io.BytesIO(img_data))
 
             # Run OCR
-            text = pytesseract.image_to_string(img, lang='eng+nld')
+            text = pytesseract.image_to_string(img, lang="eng+nld")
             return text
         except ImportError:
             # OCR dependencies not installed
@@ -216,13 +218,15 @@ class PDFExtractor:
         info = PersonalInfo()
 
         # Extract email
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
         email_matches = re.findall(email_pattern, text)
         if email_matches:
             info.email = email_matches[0]
 
         # Extract phone
-        phone_pattern = r'[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}'
+        phone_pattern = (
+            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
+        )
         phone_matches = re.findall(phone_pattern, text[:500])  # Look in first 500 chars
         if phone_matches:
             info.phone = phone_matches[0]
@@ -244,15 +248,30 @@ class PDFExtractor:
         Returns:
             Tuple of (first_name, last_name)
         """
-        lines = text.split('\n')
+        lines = text.split("\n")
         candidates = []
 
         # Common sidebar headings and phrases to skip
         sidebar_headings = [
-            'contact', 'top skills', 'skills', 'languages', 'certifications',
-            'certificates', 'summary', 'profile', 'experience', 'education',
-            'expertise', 'competencies', 'about', 'honors', 'awards',
-            'other languages', 'spoken english', 'native or', 'limited working'
+            "contact",
+            "top skills",
+            "skills",
+            "languages",
+            "certifications",
+            "certificates",
+            "summary",
+            "profile",
+            "experience",
+            "education",
+            "expertise",
+            "competencies",
+            "about",
+            "honors",
+            "awards",
+            "other languages",
+            "spoken english",
+            "native or",
+            "limited working",
         ]
 
         for i, line in enumerate(lines[:30]):  # Check first 30 lines
@@ -268,18 +287,18 @@ class PDFExtractor:
 
             # Skip lines with URLs or common non-name patterns
             skip_patterns = [
-                r'www\.',
-                r'http',
-                r'\.com',
-                r'\.nl',
-                r'\.org',
-                r'linkedin',
-                r'\(.*\)',  # Text in parentheses
-                r'@',       # Email
-                r'\d{4}',   # Years
-                r'page\s+\d+',  # Page numbers
-                r'&',       # Ampersands (often in titles)
-                r'\|',      # Pipes (often in titles)
+                r"www\.",
+                r"http",
+                r"\.com",
+                r"\.nl",
+                r"\.org",
+                r"linkedin",
+                r"\(.*\)",  # Text in parentheses
+                r"@",  # Email
+                r"\d{4}",  # Years
+                r"page\s+\d+",  # Page numbers
+                r"&",  # Ampersands (often in titles)
+                r"\|",  # Pipes (often in titles)
             ]
 
             if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
@@ -291,8 +310,11 @@ class PDFExtractor:
             # Name should be exactly 2-3 words, each capitalized
             if 2 <= len(words) <= 3:
                 # Check if all words are title case and mostly alpha
-                if all(word[0].isupper() and word.replace('-', '').replace("'", '').isalpha()
-                       for word in words if word):
+                if all(
+                    word[0].isupper() and word.replace("-", "").replace("'", "").isalpha()
+                    for word in words
+                    if word
+                ):
                     # Calculate a score for this candidate
                     score = 0
 
@@ -319,7 +341,10 @@ class PDFExtractor:
                     # Check if words look like common first names (heuristic: ends with common suffixes)
                     first_word = words[0]
                     # Common name endings
-                    if any(first_word.endswith(suffix) for suffix in ['el', 'an', 'en', 'on', 'er', 'le', 'ie']):
+                    if any(
+                        first_word.endswith(suffix)
+                        for suffix in ["el", "an", "en", "on", "er", "le", "ie"]
+                    ):
                         score += 2
 
                     candidates.append((score, words, i, line))
@@ -330,7 +355,7 @@ class PDFExtractor:
             best_words = candidates[0][1]
 
             first_name = best_words[0]
-            last_name = ' '.join(best_words[1:])
+            last_name = " ".join(best_words[1:])
             return first_name, last_name
 
         return None, None
@@ -346,30 +371,42 @@ class PDFExtractor:
         """
         # Common location patterns in headers
         # Format: "City, Region, Country" or "City, Country"
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         # Check first 50 lines for location patterns
         for line in lines[:50]:
             line = line.strip()
 
             # Skip empty lines and URLs
-            if not line or 'http' in line.lower() or '@' in line:
+            if not line or "http" in line.lower() or "@" in line:
                 continue
 
             # Look for lines with comma-separated location info
-            if ',' in line:
+            if "," in line:
                 # Common country names and variations
                 countries = [
-                    'Netherlands', 'Holland', 'Germany', 'Belgium', 'France',
-                    'United Kingdom', 'UK', 'United States', 'USA', 'Spain',
-                    'Italy', 'Portugal', 'Poland', 'Sweden', 'Denmark'
+                    "Netherlands",
+                    "Holland",
+                    "Germany",
+                    "Belgium",
+                    "France",
+                    "United Kingdom",
+                    "UK",
+                    "United States",
+                    "USA",
+                    "Spain",
+                    "Italy",
+                    "Portugal",
+                    "Poland",
+                    "Sweden",
+                    "Denmark",
                 ]
 
                 # Check if any country is mentioned
                 for country in countries:
                     if country.lower() in line.lower():
                         # Split by comma and extract city
-                        parts = [p.strip() for p in line.split(',')]
+                        parts = [p.strip() for p in line.split(",")]
                         if len(parts) >= 2:
                             city = parts[0]
                             # Verify city looks reasonable (not too long, not just numbers)
@@ -443,7 +480,7 @@ class PDFExtractor:
         # Split text into potential entries by looking for date ranges
         # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
         # More strict: require either full month name or standard abbreviation
-        date_range_pattern = r'((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)'
+        date_range_pattern = r"((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)"
 
         entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
 
@@ -470,7 +507,7 @@ class PDFExtractor:
 
                     # Parse dates
                     exp.start_date = self._parse_date(start_date_str)
-                    if end_date_str.lower() == 'present':
+                    if end_date_str.lower() == "present":
                         exp.current = True
                         exp.end_date = None
                     else:
@@ -478,7 +515,9 @@ class PDFExtractor:
 
                     # Extract position and employer from text before dates
                     # LinkedIn format: Company / Duration / Position / Date
-                    lines_before = [line.strip() for line in before_text.split('\n') if line.strip()]
+                    lines_before = [
+                        line.strip() for line in before_text.split("\n") if line.strip()
+                    ]
                     if lines_before:
                         # Last non-empty line before dates is usually the position
                         exp.position = lines_before[-1] if lines_before else None
@@ -491,21 +530,32 @@ class PDFExtractor:
                         elif len(lines_before) == 2:
                             # If we have 2 lines, check if second-to-last is a duration
                             potential_employer = lines_before[-2]
-                            if not re.search(r'\d+\s+(year|month|day)', potential_employer, re.IGNORECASE) \
-                               and not re.search(r'page\s+\d+', potential_employer, re.IGNORECASE):
+                            if not re.search(
+                                r"\d+\s+(year|month|day)",
+                                potential_employer,
+                                re.IGNORECASE,
+                            ) and not re.search(r"page\s+\d+", potential_employer, re.IGNORECASE):
                                 exp.employer = potential_employer
 
                     # Extract location and description from content after dates
                     content_lines = [
-                        line.strip() for line in content_after.split('\n')[:20] if line.strip()
+                        line.strip() for line in content_after.split("\n")[:20] if line.strip()
                     ]
 
                     # First line after dates often contains location
                     if content_lines:
                         first_line = content_lines[0]
                         # Check if it looks like a location
-                        if any(word in first_line for word in ['Netherlands', 'Holland', 'Amsterdam', 'Utrecht']):
-                            location_parts = first_line.split(',')
+                        if any(
+                            word in first_line
+                            for word in [
+                                "Netherlands",
+                                "Holland",
+                                "Amsterdam",
+                                "Utrecht",
+                            ]
+                        ):
+                            location_parts = first_line.split(",")
                             if len(location_parts) >= 2:
                                 exp.city = location_parts[0].strip()
                                 exp.country = location_parts[-1].strip()
@@ -513,7 +563,7 @@ class PDFExtractor:
 
                     # Remaining lines are description/activities
                     if content_lines:
-                        exp.description = '\n'.join(content_lines[:10])  # Limit to first 10 lines
+                        exp.description = "\n".join(content_lines[:10])  # Limit to first 10 lines
 
                     experiences.append(exp)
                     i += 4  # Skip the processed parts
@@ -547,22 +597,34 @@ class PDFExtractor:
             return parsed.date()
         except Exception:
             # Try to extract at least year and month
-            year_match = re.search(r'\b(19|20)\d{2}\b', date_str)
+            year_match = re.search(r"\b(19|20)\d{2}\b", date_str)
             if year_match:
                 year = int(year_match.group())
 
                 month_names = {
-                    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-                    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+                    "jan": 1,
+                    "feb": 2,
+                    "mar": 3,
+                    "apr": 4,
+                    "may": 5,
+                    "jun": 6,
+                    "jul": 7,
+                    "aug": 8,
+                    "sep": 9,
+                    "oct": 10,
+                    "nov": 11,
+                    "dec": 12,
                 }
 
                 for month_name, month_num in month_names.items():
                     if month_name in date_str.lower():
                         from datetime import date as date_class
+
                         return date_class(year, month_num, 1)
 
                 # Just year
                 from datetime import date as date_class
+
                 return date_class(year, 1, 1)
 
         return None
@@ -580,12 +642,18 @@ class PDFExtractor:
 
         # Common university/school keywords
         institution_keywords = [
-            'university', 'universiteit', 'college', 'school', 'hogeschool',
-            'institute', 'academy', 'polytechnic'
+            "university",
+            "universiteit",
+            "college",
+            "school",
+            "hogeschool",
+            "institute",
+            "academy",
+            "polytechnic",
         ]
 
         # Split by lines and look for institution names
-        lines = text.split('\n')
+        lines = text.split("\n")
         current_edu = None
         current_lines = []
 
@@ -595,20 +663,32 @@ class PDFExtractor:
                 continue
 
             # Check if line contains an institution name
-            is_institution = any(keyword in line_stripped.lower() for keyword in institution_keywords)
+            is_institution = any(
+                keyword in line_stripped.lower() for keyword in institution_keywords
+            )
 
             # Check if line contains a degree pattern
             degree_patterns = [
-                r"bachelor", r"master", r"phd", r"doctorate",
-                r"degree", r"msc", r"bsc", r"ma", r"ba", r"mba"
+                r"bachelor",
+                r"master",
+                r"phd",
+                r"doctorate",
+                r"degree",
+                r"msc",
+                r"bsc",
+                r"ma",
+                r"ba",
+                r"mba",
             ]
-            has_degree = any(re.search(pattern, line_stripped, re.IGNORECASE) for pattern in degree_patterns)
+            has_degree = any(
+                re.search(pattern, line_stripped, re.IGNORECASE) for pattern in degree_patterns
+            )
 
             # Start new entry if we find an institution or degree
             if is_institution or (has_degree and not current_edu):
                 # Save previous entry if exists
                 if current_edu and current_lines:
-                    current_edu.description = '\n'.join(current_lines[:10])
+                    current_edu.description = "\n".join(current_lines[:10])
                     education_list.append(current_edu)
 
                 # Start new entry
@@ -623,18 +703,20 @@ class PDFExtractor:
             # Accumulate lines for current entry
             if current_edu:
                 # Try to extract dates from this line
-                date_match = re.search(r'(\d{4})\s*[-–—]\s*(\d{4})', line_stripped)
+                date_match = re.search(r"(\d{4})\s*[-–—]\s*(\d{4})", line_stripped)
                 if date_match:
                     start_year = int(date_match.group(1))
                     end_year = int(date_match.group(2))
                     from datetime import date as date_class
+
                     current_edu.start_date = date_class(start_year, 9, 1)  # Assume September start
                     current_edu.end_date = date_class(end_year, 6, 30)  # Assume June end
-                elif re.search(r'\b(\d{4})\b', line_stripped):
+                elif re.search(r"\b(\d{4})\b", line_stripped):
                     # Single year mention
-                    year = int(re.search(r'\b(\d{4})\b', line_stripped).group(1))
+                    year = int(re.search(r"\b(\d{4})\b", line_stripped).group(1))
                     if not current_edu.end_date:
                         from datetime import date as date_class
+
                         current_edu.end_date = date_class(year, 6, 30)
 
                 # Check for degree in line if title not set
@@ -646,7 +728,7 @@ class PDFExtractor:
         # Don't forget last entry
         if current_edu:
             if current_lines:
-                current_edu.description = '\n'.join(current_lines[:10])
+                current_edu.description = "\n".join(current_lines[:10])
             education_list.append(current_edu)
 
         # Fallback: if no structured entries found, create one with all text
@@ -669,37 +751,47 @@ class PDFExtractor:
 
         # Common languages
         language_names = [
-            "English", "Dutch", "German", "French", "Spanish", "Italian",
-            "Portuguese", "Chinese", "Japanese", "Russian", "Arabic", "Nederlands"
+            "English",
+            "Dutch",
+            "German",
+            "French",
+            "Spanish",
+            "Italian",
+            "Portuguese",
+            "Chinese",
+            "Japanese",
+            "Russian",
+            "Arabic",
+            "Nederlands",
         ]
 
         # Proficiency level mappings to CEFR
         proficiency_map = {
-            'native': 'C2',
-            'bilingual': 'C2',
-            'fluent': 'C1',
-            'professional': 'C1',
-            'advanced': 'B2',
-            'intermediate': 'B1',
-            'elementary': 'A2',
-            'basic': 'A1',
-            'limited': 'B1',
-            'full professional': 'C1',
-            'professional working': 'B2',
-            'limited working': 'B1',
+            "native": "C2",
+            "bilingual": "C2",
+            "fluent": "C1",
+            "professional": "C1",
+            "advanced": "B2",
+            "intermediate": "B1",
+            "elementary": "A2",
+            "basic": "A1",
+            "limited": "B1",
+            "full professional": "C1",
+            "professional working": "B2",
+            "limited working": "B1",
         }
 
         # CEFR levels
-        cefr_pattern = r'\b([A-C][1-2])\b'
+        cefr_pattern = r"\b([A-C][1-2])\b"
 
         for lang in language_names:
-            if re.search(rf'\b{lang}\b', text, re.IGNORECASE):
+            if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
                 language = Language(language=lang)
 
                 # Find context around the language name (100 chars before and after)
                 lang_pos = text.lower().find(lang.lower())
                 if lang_pos >= 0:
-                    context = text[max(0, lang_pos - 100):lang_pos + 150]
+                    context = text[max(0, lang_pos - 100) : lang_pos + 150]
 
                     # Try to find CEFR level
                     cefr_match = re.search(cefr_pattern, context)
@@ -712,7 +804,7 @@ class PDFExtractor:
                     else:
                         # Try to find proficiency description
                         for prof_text, cefr_level in proficiency_map.items():
-                            if re.search(rf'\b{prof_text}\b', context, re.IGNORECASE):
+                            if re.search(rf"\b{prof_text}\b", context, re.IGNORECASE):
                                 language.listening = cefr_level
                                 language.reading = cefr_level
                                 language.speaking = cefr_level
@@ -736,12 +828,22 @@ class PDFExtractor:
         seen_skills = set()  # Track duplicates
 
         # Split by common delimiters
-        skill_items = re.split(r'[,•\n·]', text)
+        skill_items = re.split(r"[,•\n·]", text)
 
         # Noise words to skip (common resume fluff)
         noise_words = {
-            'skills', 'experience', 'proficient', 'knowledge', 'familiar',
-            'and', 'or', 'including', 'such as', 'etc', 'years', 'page'
+            "skills",
+            "experience",
+            "proficient",
+            "knowledge",
+            "familiar",
+            "and",
+            "or",
+            "including",
+            "such as",
+            "etc",
+            "years",
+            "page",
         }
 
         for item in skill_items:
@@ -752,7 +854,7 @@ class PDFExtractor:
                 continue
 
             # Skip if it's just numbers or dates
-            if re.match(r'^[\d\s\-/]+$', item):
+            if re.match(r"^[\d\s\-/]+$", item):
                 continue
 
             # Skip noise words
@@ -764,7 +866,7 @@ class PDFExtractor:
                 continue
 
             # Normalize for duplicate detection (lowercase, remove spaces)
-            normalized = item.lower().replace(' ', '')
+            normalized = item.lower().replace(" ", "")
             if normalized in seen_skills:
                 continue
 
@@ -784,7 +886,7 @@ class PDFExtractor:
             List of Certification objects
         """
         certifications = []
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         for line in lines:
             line = line.strip()
@@ -792,22 +894,32 @@ class PDFExtractor:
             # Skip empty lines, page numbers, section headers
             if not line or len(line) < 5:
                 continue
-            if re.search(r'page\s+\d+|certifications?|licenses?', line, re.IGNORECASE):
+            if re.search(r"page\s+\d+|certifications?|licenses?", line, re.IGNORECASE):
                 continue
 
             # Check if line looks like a certification
             # Usually certification lines have capital letters or known cert names
-            if any(word in line for word in ['Certified', 'Foundation', 'Professional', 'AWS', 'Azure', 'Microsoft']):
+            if any(
+                word in line
+                for word in [
+                    "Certified",
+                    "Foundation",
+                    "Professional",
+                    "AWS",
+                    "Azure",
+                    "Microsoft",
+                ]
+            ):
                 cert = Certification(name=line)
 
                 # Try to extract date from the line
-                year_match = re.search(r'\b(20\d{2})\b', line)
+                year_match = re.search(r"\b(20\d{2})\b", line)
                 if year_match:
                     year = int(year_match.group(1))
                     from datetime import date as date_class
+
                     cert.date = date_class(year, 1, 1)
 
                 certifications.append(cert)
 
         return certifications
-

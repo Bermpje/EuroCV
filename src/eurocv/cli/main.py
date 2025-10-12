@@ -201,13 +201,13 @@ def validate(
     console.print(f"[blue]Validating: {input_file}[/blue]")
 
     try:
-        with open(input_file, encoding='utf-8') as f:
+        with open(input_file, encoding="utf-8") as f:
             content = f.read()
 
         validator = SchemaValidator()
 
         # Determine format
-        if input_file.suffix.lower() == '.json':
+        if input_file.suffix.lower() == ".json":
             data = json.loads(content)
             is_valid, errors = validator.validate_json(data)
         else:
@@ -252,7 +252,9 @@ def serve(
         )
 
     except ImportError:
-        console.print("[red]FastAPI/uvicorn not installed. Install with: pip install eurocv[api][/red]")
+        console.print(
+            "[red]FastAPI/uvicorn not installed. Install with: pip install eurocv[api][/red]"
+        )
         raise typer.Exit(1)
 
 
@@ -260,12 +262,13 @@ def serve(
 def version() -> None:
     """Show version information."""
     from eurocv import __version__
+
     console.print(f"eurocv version {__version__}")
 
 
 def _save_json(data: dict, path: Path, pretty: bool = True) -> None:
     """Save JSON data to file."""
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         if pretty:
             json.dump(data, f, indent=2, ensure_ascii=False)
         else:
@@ -282,10 +285,9 @@ def _print_json(data: dict, pretty: bool = True) -> None:
 
 def _save_xml(data: str, path: Path) -> None:
     """Save XML data to file."""
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(data)
 
 
 if __name__ == "__main__":
     app()
-

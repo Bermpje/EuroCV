@@ -140,7 +140,7 @@ class SchemaValidator:
 
             # Parse XML
             try:
-                root = etree.fromstring(xml_string.encode('utf-8'))
+                root = etree.fromstring(xml_string.encode("utf-8"))
             except etree.XMLSyntaxError as e:
                 errors.append(f"XML syntax error: {str(e)}")
                 return False, errors
@@ -149,7 +149,7 @@ class SchemaValidator:
             schema_path = self.schema_dir / "europass_cv_v3.xsd"
             if schema_path.exists():
                 try:
-                    with open(schema_path, 'rb') as f:
+                    with open(schema_path, "rb") as f:
                         schema_doc = etree.parse(f)
                         schema = etree.XMLSchema(schema_doc)
 
@@ -183,9 +183,11 @@ def convert_to_xml(data: dict[str, Any]) -> str:
         from lxml import etree
 
         # Create root element
-        root = etree.Element("Europass",
-                           xmlns="http://europass.cedefop.europa.eu/Europass",
-                           nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance"})
+        root = etree.Element(
+            "Europass",
+            xmlns="http://europass.cedefop.europa.eu/Europass",
+            nsmap={"xsi": "http://www.w3.org/2001/XMLSchema-instance"},
+        )
 
         # Add DocumentInfo
         if "DocumentInfo" in data:
@@ -200,13 +202,13 @@ def convert_to_xml(data: dict[str, Any]) -> str:
             _dict_to_xml(data["LearnerInfo"], learner_info)
 
         # Pretty print
-        xml_string = etree.tostring(root, pretty_print=True,
-                                    xml_declaration=True, encoding='UTF-8')
-        return xml_string.decode('utf-8')
+        xml_string = etree.tostring(root, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+        return xml_string.decode("utf-8")
 
     except ImportError:
         # Fallback to simple XML generation
         import xmltodict
+
         xml_dict = {"Europass": data}
         return xmltodict.unparse(xml_dict, pretty=True)
 
@@ -234,4 +236,3 @@ def _dict_to_xml(data: Any, parent: Any) -> None:
                 child.text = str(value) if value is not None else ""
     else:
         parent.text = str(data) if data is not None else ""
-
