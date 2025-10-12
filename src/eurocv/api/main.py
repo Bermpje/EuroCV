@@ -2,13 +2,14 @@
 
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, PlainTextResponse
+from typing import Any, Optional
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from eurocv.core.converter import convert_to_europass, validate_europass
 from eurocv import __version__
+from eurocv.core.converter import convert_to_europass, validate_europass
 
 # Create FastAPI app
 app = FastAPI(
@@ -32,7 +33,7 @@ class ConvertRequest(BaseModel):
 class ConvertResponse(BaseModel):
     """Convert response."""
     success: bool
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[dict[str, Any]] = None
     xml: Optional[str] = None
     validation_errors: list[str] = []
     message: Optional[str] = None
@@ -40,7 +41,7 @@ class ConvertResponse(BaseModel):
 
 class ValidateRequest(BaseModel):
     """Validation request."""
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 
 class ValidateResponse(BaseModel):
@@ -50,7 +51,7 @@ class ValidateResponse(BaseModel):
 
 
 @app.get("/")
-async def root() -> Dict[str, str]:
+async def root() -> dict[str, str]:
     """Root endpoint."""
     return {
         "service": "EuroCV API",
@@ -61,7 +62,7 @@ async def root() -> Dict[str, str]:
 
 
 @app.get("/healthz")
-async def health() -> Dict[str, str]:
+async def health() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy", "version": __version__}
 
@@ -76,9 +77,9 @@ async def convert(
     validate: bool = Form(True, description="Validate against Europass schema"),
 ) -> ConvertResponse:
     """Convert a resume file to Europass format.
-    
+
     Upload a PDF or DOCX resume file and get back Europass JSON/XML.
-    
+
     Parameters:
     - **file**: Resume file (PDF or DOCX)
     - **locale**: Locale for date/number formatting (default: en-US)
@@ -86,7 +87,7 @@ async def convert(
     - **output_format**: Output format - json, xml, or both (default: json)
     - **use_ocr**: Use OCR for scanned PDFs (default: false)
     - **validate**: Validate output against schema (default: true)
-    
+
     Returns:
     - **success**: Whether conversion succeeded
     - **data**: Europass JSON data (if output_format is json or both)
@@ -97,28 +98,28 @@ async def convert(
     # Validate file type
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
-    
+
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in ['.pdf', '.docx', '.doc']:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file format: {file_ext}. Supported: .pdf, .docx, .doc"
         )
-    
+
     # Validate output format
     if output_format not in ['json', 'xml', 'both']:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid output_format: {output_format}. Must be: json, xml, or both"
         )
-    
+
     # Save uploaded file to temporary location
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
             content = await file.read()
             tmp_file.write(content)
             tmp_path = tmp_file.name
-        
+
         # Convert
         result = convert_to_europass(
             tmp_path,
@@ -128,10 +129,10 @@ async def convert(
             use_ocr=use_ocr,
             validate=validate,
         )
-        
+
         # Clean up temp file
         Path(tmp_path).unlink()
-        
+
         # Build response
         if output_format == "json":
             return ConvertResponse(
@@ -153,7 +154,7 @@ async def convert(
                 validation_errors=result.validation_errors,
                 message="Conversion successful"
             )
-    
+
     except Exception as e:
         # Clean up temp file on error
         if 'tmp_path' in locals():
@@ -161,35 +162,35 @@ async def convert(
                 Path(tmp_path).unlink()
             except Exception:
                 pass
-        
+
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
 
 @app.post("/validate", response_model=ValidateResponse)
 async def validate_endpoint(request: ValidateRequest) -> ValidateResponse:
     """Validate Europass JSON data against the schema.
-    
+
     Parameters:
     - **data**: Europass JSON data to validate
-    
+
     Returns:
     - **is_valid**: Whether the data is valid
     - **errors**: List of validation errors
     """
     try:
         is_valid, errors = validate_europass(request.data)
-        
+
         return ValidateResponse(
             is_valid=is_valid,
             errors=errors
         )
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
 
 
 @app.get("/info")
-async def info() -> Dict[str, Any]:
+async def info() -> dict[str, Any]:
     """Get service information and capabilities."""
     return {
         "service": "EuroCV API",

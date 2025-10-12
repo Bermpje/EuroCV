@@ -2,11 +2,12 @@
 
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
+
 import typer
+from rich import print as rprint
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import print as rprint
 
 from eurocv.core.converter import convert_to_europass
 from eurocv.core.validate.schema_validator import SchemaValidator
@@ -32,7 +33,7 @@ def convert(
     pretty: bool = typer.Option(True, "--pretty/--compact", help="Pretty-print JSON"),
 ) -> None:
     """Convert a resume file to Europass format.
-    
+
     Examples:
         eurocv convert resume.pdf --out output.json
         eurocv convert resume.docx --out-json out.json --out-xml out.xml
@@ -44,14 +45,14 @@ def convert(
         output_format = "xml"
     elif (out or out_json) and out_xml:
         output_format = "both"
-    
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
         task = progress.add_task("Converting resume...", total=None)
-        
+
         try:
             result = convert_to_europass(
                 str(input_file),
@@ -61,14 +62,14 @@ def convert(
                 use_ocr=use_ocr,
                 validate=validate,
             )
-            
+
             progress.update(task, description="[green]Conversion complete!")
-        
+
         except Exception as e:
             progress.update(task, description="[red]Conversion failed!")
             console.print(f"[red]Error: {str(e)}[/red]")
             raise typer.Exit(1)
-    
+
     # Handle output
     if output_format == "both":
         # Save JSON
@@ -78,18 +79,18 @@ def convert(
             console.print(f"[green]✓[/green] JSON saved to: {json_path}")
         else:
             _print_json(result.json, pretty)
-        
+
         # Save XML
         if out_xml:
             _save_xml(result.xml, out_xml)
             console.print(f"[green]✓[/green] XML saved to: {out_xml}")
-        
+
         # Show validation results
         if validate and result.validation_errors:
             console.print("[yellow]⚠ Validation warnings:[/yellow]")
             for error in result.validation_errors:
                 console.print(f"  • {error}")
-    
+
     elif output_format == "json":
         if out or out_json:
             json_path = out or out_json
@@ -97,7 +98,7 @@ def convert(
             console.print(f"[green]✓[/green] Saved to: {json_path}")
         else:
             _print_json(result, pretty)
-    
+
     elif output_format == "xml":
         if out_xml:
             _save_xml(result, out_xml)
@@ -117,36 +118,36 @@ def batch(
     format: str = typer.Option("json", "--format", "-f", help="Output format (json/xml/both)"),
 ) -> None:
     """Batch convert multiple resume files.
-    
+
     Examples:
         eurocv batch "resumes/*.pdf" --out-dir output/
         eurocv batch "*.docx" --parallel 4 --format both
     """
     from glob import glob
-    
+
     # Find matching files
     files = glob(input_pattern)
-    
+
     if not files:
         console.print(f"[yellow]No files found matching: {input_pattern}[/yellow]")
         raise typer.Exit(0)
-    
+
     # Create output directory
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     console.print(f"[blue]Found {len(files)} file(s) to convert[/blue]")
-    
+
     # Process files
     with Progress(console=console) as progress:
         task = progress.add_task("[cyan]Converting files...", total=len(files))
-        
+
         success_count = 0
         error_count = 0
-        
+
         for file_path in files:
             file_path = Path(file_path)
             progress.update(task, description=f"[cyan]Converting: {file_path.name}")
-            
+
             try:
                 # Convert
                 result = convert_to_europass(
@@ -157,28 +158,28 @@ def batch(
                     use_ocr=use_ocr,
                     validate=False,  # Skip validation for batch to speed up
                 )
-                
+
                 # Save output
                 base_name = file_path.stem
-                
+
                 if format in ["json", "both"]:
                     json_path = out_dir / f"{base_name}.europass.json"
                     data = result.json if format == "both" else result
                     _save_json(data, json_path, pretty=True)
-                
+
                 if format in ["xml", "both"]:
                     xml_path = out_dir / f"{base_name}.europass.xml"
                     data = result.xml if format == "both" else result
                     _save_xml(data, xml_path)
-                
+
                 success_count += 1
-            
+
             except Exception as e:
                 console.print(f"[red]✗[/red] {file_path.name}: {str(e)}")
                 error_count += 1
-            
+
             progress.advance(task)
-    
+
     # Summary
     console.print("\n[bold]Summary:[/bold]")
     console.print(f"  [green]✓[/green] Successful: {success_count}")
@@ -192,26 +193,26 @@ def validate(
     schema: Optional[Path] = typer.Option(None, "--schema", help="Custom schema file"),
 ) -> None:
     """Validate a Europass JSON or XML file against the schema.
-    
+
     Examples:
         eurocv validate europass.json
         eurocv validate europass.xml
     """
     console.print(f"[blue]Validating: {input_file}[/blue]")
-    
+
     try:
-        with open(input_file, 'r', encoding='utf-8') as f:
+        with open(input_file, encoding='utf-8') as f:
             content = f.read()
-        
+
         validator = SchemaValidator()
-        
+
         # Determine format
         if input_file.suffix.lower() == '.json':
             data = json.loads(content)
             is_valid, errors = validator.validate_json(data)
         else:
             is_valid, errors = validator.validate_xml(content)
-        
+
         if is_valid:
             console.print("[green]✓ Validation passed![/green]")
         else:
@@ -219,7 +220,7 @@ def validate(
             for error in errors:
                 console.print(f"  • {error}")
             raise typer.Exit(1)
-    
+
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
         raise typer.Exit(1)
@@ -232,25 +233,24 @@ def serve(
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
 ) -> None:
     """Start the HTTP API server.
-    
+
     Examples:
         eurocv serve
         eurocv serve --port 8080 --reload
     """
     try:
         import uvicorn
-        from eurocv.api.main import app as api_app
-        
+
         console.print(f"[blue]Starting server on {host}:{port}[/blue]")
         console.print(f"[blue]API docs: http://{host}:{port}/docs[/blue]")
-        
+
         uvicorn.run(
             "eurocv.api.main:app",
             host=host,
             port=port,
             reload=reload,
         )
-    
+
     except ImportError:
         console.print("[red]FastAPI/uvicorn not installed. Install with: pip install eurocv[api][/red]")
         raise typer.Exit(1)
