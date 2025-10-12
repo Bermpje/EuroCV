@@ -5,11 +5,13 @@ on:
     branches:
       - main
       - develop
+      - 'feature/**'
     tags:
       - 'v*'
   pull_request:
     branches:
       - main
+      - develop
 
 env:
   REGISTRY: ghcr.io
