@@ -75,14 +75,14 @@ def convert(
         # Save JSON
         json_path = out or out_json
         if json_path:
-            _save_json(result.json_data_data, json_path, pretty)
+            _save_json(result.json_data, json_path, pretty)
             console.print(f"[green]✓[/green] JSON saved to: {json_path}")
         else:
-            _print_json(result.json_data_data, pretty)
+            _print_json(result.json_data, pretty)
 
         # Save XML
         if out_xml:
-            _save_xml(result.xml_data_data, out_xml)
+            _save_xml(result.xml_data, out_xml)
             console.print(f"[green]✓[/green] XML saved to: {out_xml}")
 
         # Show validation results
