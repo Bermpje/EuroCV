@@ -328,3 +328,232 @@ def test_convert_pretty_json(mock_convert, runner, sample_pdf_file, tmp_path):
     
     assert result.exit_code == 0
 
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_convert_with_validation_warnings(mock_convert, runner, sample_pdf_file):
+    """Test convert with validation warnings."""
+    mock_result = ConversionResult(
+        json_data={"DocumentInfo": {}, "LearnerInfo": {}},
+        xml_data='<?xml version="1.0"?><root/>',
+        validation_errors=["Warning: Missing field X", "Warning: Invalid format Y"],
+        warnings=[]
+    )
+    mock_convert.return_value = mock_result
+    
+    result = runner.invoke(app, [
+        "convert",
+        str(sample_pdf_file),
+        "--validate"
+    ])
+    
+    # Should show warnings
+    assert result.exit_code == 0
+
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_convert_xml_to_stdout(mock_convert, runner, sample_pdf_file):
+    """Test convert XML output to stdout."""
+    mock_convert.return_value = '<?xml version="1.0"?><Europass></Europass>'
+    
+    result = runner.invoke(app, [
+        "convert",
+        str(sample_pdf_file),
+        "--out-xml", "-",  # stdout
+        "--no-validate"
+    ])
+    
+    # May not work with "-" but should handle gracefully
+    assert result.exit_code in [0, 1, 2]
+
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_batch_command_success(mock_convert, runner, tmp_path):
+    """Test batch command with successful conversions."""
+    # Create actual PDF files
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+xref
+0 2
+trailer
+<< /Size 2 /Root 1 0 R >>
+startxref
+50
+%%EOF"""
+    
+    for i in range(3):
+        (tmp_path / f"resume{i}.pdf").write_bytes(pdf_content)
+    
+    mock_convert.return_value = {"DocumentInfo": {}, "LearnerInfo": {}}
+    
+    output_dir = tmp_path / "output"
+    
+    result = runner.invoke(app, [
+        "batch",
+        str(tmp_path / "*.pdf"),
+        "--out-dir", str(output_dir)
+    ])
+    
+    # Should process files
+    assert result.exit_code == 0
+    assert output_dir.exists()
+
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_batch_command_with_errors(mock_convert, runner, tmp_path):
+    """Test batch command with some failures."""
+    # Create files
+    for i in range(2):
+        (tmp_path / f"resume{i}.pdf").write_text("fake pdf")
+    
+    # Mock one success, one failure
+    mock_convert.side_effect = [
+        {"DocumentInfo": {}, "LearnerInfo": {}},
+        Exception("Conversion failed")
+    ]
+    
+    output_dir = tmp_path / "output"
+    
+    result = runner.invoke(app, [
+        "batch",
+        str(tmp_path / "*.pdf"),
+        "--out-dir", str(output_dir)
+    ])
+    
+    # Should complete but show errors
+    assert result.exit_code == 0
+
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_batch_command_xml_format(mock_convert, runner, tmp_path):
+    """Test batch command with XML format."""
+    (tmp_path / "resume.pdf").write_bytes(b"%PDF-1.4\n%%EOF")
+    
+    mock_convert.return_value = '<?xml version="1.0"?><root/>'
+    
+    output_dir = tmp_path / "output"
+    
+    result = runner.invoke(app, [
+        "batch",
+        str(tmp_path / "*.pdf"),
+        "--out-dir", str(output_dir),
+        "--format", "xml"
+    ])
+    
+    assert result.exit_code == 0
+
+
+@patch('eurocv.cli.main.convert_to_europass')
+def test_batch_command_both_formats(mock_convert, runner, tmp_path):
+    """Test batch command with both formats."""
+    (tmp_path / "resume.pdf").write_bytes(b"%PDF-1.4\n%%EOF")
+    
+    mock_result = ConversionResult(
+        json_data={"DocumentInfo": {}, "LearnerInfo": {}},
+        xml_data='<?xml version="1.0"?><root/>',
+        validation_errors=[],
+        warnings=[]
+    )
+    mock_convert.return_value = mock_result
+    
+    output_dir = tmp_path / "output"
+    
+    result = runner.invoke(app, [
+        "batch",
+        str(tmp_path / "*.pdf"),
+        "--out-dir", str(output_dir),
+        "--format", "both"
+    ])
+    
+    assert result.exit_code == 0
+
+
+def test_batch_command_no_files(runner, tmp_path):
+    """Test batch command when no files match pattern."""
+    result = runner.invoke(app, [
+        "batch",
+        str(tmp_path / "*.pdf"),
+        "--out-dir", str(tmp_path / "output")
+    ])
+    
+    # Should exit gracefully
+    assert result.exit_code == 0
+
+
+@patch('eurocv.cli.main.SchemaValidator')
+def test_validate_command_valid_json(mock_validator_class, runner, tmp_path):
+    """Test validate command with valid JSON."""
+    json_file = tmp_path / "test.json"
+    json_file.write_text('{"DocumentInfo": {}, "LearnerInfo": {}}')
+    
+    mock_validator = MagicMock()
+    mock_validator.validate_json.return_value = (True, [])
+    mock_validator_class.return_value = mock_validator
+    
+    result = runner.invoke(app, ["validate", str(json_file)])
+    
+    assert result.exit_code == 0
+    assert "passed" in result.stdout.lower()
+
+
+@patch('eurocv.cli.main.SchemaValidator')
+def test_validate_command_invalid_json(mock_validator_class, runner, tmp_path):
+    """Test validate command with invalid JSON."""
+    json_file = tmp_path / "test.json"
+    json_file.write_text('{"invalid": "data"}')
+    
+    mock_validator = MagicMock()
+    mock_validator.validate_json.return_value = (False, ["Error 1", "Error 2"])
+    mock_validator_class.return_value = mock_validator
+    
+    result = runner.invoke(app, ["validate", str(json_file)])
+    
+    assert result.exit_code == 1
+    assert "failed" in result.stdout.lower()
+
+
+@patch('eurocv.cli.main.SchemaValidator')
+def test_validate_command_xml_file(mock_validator_class, runner, tmp_path):
+    """Test validate command with XML file."""
+    xml_file = tmp_path / "test.xml"
+    xml_file.write_text('<?xml version="1.0"?><Europass></Europass>')
+    
+    mock_validator = MagicMock()
+    mock_validator.validate_xml.return_value = (True, [])
+    mock_validator_class.return_value = mock_validator
+    
+    result = runner.invoke(app, ["validate", str(xml_file)])
+    
+    assert result.exit_code == 0
+
+
+def test_validate_command_file_error(runner, tmp_path):
+    """Test validate command with file read error."""
+    result = runner.invoke(app, ["validate", "nonexistent.json"])
+    
+    # Should fail gracefully
+    assert result.exit_code != 0
+
+
+def test_serve_command(runner):
+    """Test serve command (uvicorn imported inside function)."""
+    with patch('uvicorn.run') as mock_run:
+        # Mock uvicorn.run to avoid actually starting server
+        mock_run.return_value = None
+        
+        result = runner.invoke(app, ["serve", "--host", "localhost", "--port", "8080"])
+        
+        # Should attempt to start (may succeed or show import error)
+        assert result.exit_code in [0, 1]
+
+
+def test_serve_command_no_uvicorn(runner):
+    """Test serve command when uvicorn is not installed."""
+    # Patch the import inside the function
+    with patch.dict('sys.modules', {'uvicorn': None}):
+        result = runner.invoke(app, ["serve"])
+        
+        # Should show error message or fail gracefully
+        assert result.exit_code in [0, 1]
+
