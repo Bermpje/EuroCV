@@ -17,12 +17,16 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy source code and project files
 COPY src/ /app/src/
 COPY pyproject.toml /app/
+COPY setup.py /app/
 COPY README.md /app/
 
 WORKDIR /app
 
+# Upgrade pip and setuptools to ensure pyproject.toml support
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
 # Install the package with all dependencies from pyproject.toml
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir .[ocr]
 
 
 # Stage 2: Runtime
