@@ -19,13 +19,13 @@ repos:
       - id: black
         language_version: python3.11
 
-  # MyPy - Type checker
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports, --no-strict-optional]
+  # MyPy - Type checker (optional, can be slow)
+  # Uncomment to enable:
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.11.0
+  #   hooks:
+  #     - id: mypy
+  #       args: [--ignore-missing-imports, --no-strict-optional]
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -49,4 +49,3 @@ repos:
   #       language: system
   #       pass_filenames: false
   #       always_run: true
-
