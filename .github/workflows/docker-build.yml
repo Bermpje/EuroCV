@@ -52,6 +52,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -64,5 +65,7 @@ jobs:
       - name: Test image
         if: github.event_name != 'pull_request'
         run: |
-          IMAGE_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest --version
+          # Extract the first tag from the metadata output (the branch-specific tag)
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "Testing image: $FIRST_TAG"
+          docker run --rm --platform linux/amd64 $FIRST_TAG --version
