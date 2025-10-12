@@ -75,14 +75,14 @@ def convert(
         # Save JSON
         json_path = out or out_json
         if json_path:
-            _save_json(result.json, json_path, pretty)
+            _save_json(result.json_data_data, json_path, pretty)
             console.print(f"[green]✓[/green] JSON saved to: {json_path}")
         else:
-            _print_json(result.json, pretty)
+            _print_json(result.json_data_data, pretty)
 
         # Save XML
         if out_xml:
-            _save_xml(result.xml, out_xml)
+            _save_xml(result.xml_data_data, out_xml)
             console.print(f"[green]✓[/green] XML saved to: {out_xml}")
 
         # Show validation results
@@ -164,12 +164,12 @@ def batch(
 
                 if format in ["json", "both"]:
                     json_path = out_dir / f"{base_name}.europass.json"
-                    data = result.json if format == "both" else result
+                    data = result.json_data if format == "both" else result
                     _save_json(data, json_path, pretty=True)
 
                 if format in ["xml", "both"]:
                     xml_path = out_dir / f"{base_name}.europass.xml"
-                    data = result.xml if format == "both" else result
+                    data = result.xml_data if format == "both" else result
                     _save_xml(data, xml_path)
 
                 success_count += 1

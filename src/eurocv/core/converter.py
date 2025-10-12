@@ -53,30 +53,30 @@ def convert_to_europass(
     result = ConversionResult()
 
     if output_format in ["json", "both"]:
-        result.json = europass.to_json()
+        result.json_data = europass.to_json()
 
     if output_format in ["xml", "both"]:
-        result.xml = europass.to_xml()
+        result.xml_data = europass.to_xml()
 
     # Step 4: Validate if requested
     if validate:
         validator = SchemaValidator()
 
-        if result.json:
-            is_valid, errors = validator.validate_json(result.json)
+        if result.json_data:
+            is_valid, errors = validator.validate_json(result.json_data)
             if not is_valid:
                 result.validation_errors.extend(errors)
 
-        if result.xml:
-            is_valid, errors = validator.validate_xml(result.xml)
+        if result.xml_data:
+            is_valid, errors = validator.validate_xml(result.xml_data)
             if not is_valid:
                 result.validation_errors.extend(errors)
 
     # Return appropriate format
     if output_format == "json":
-        return result.json or {}
+        return result.json_data or {}
     elif output_format == "xml":
-        return result.xml or ""
+        return result.xml_data or ""
     else:
         return result
 

@@ -145,8 +145,8 @@ async def convert(
         else:  # both
             return ConvertResponse(
                 success=True,
-                data=result.json,
-                xml=result.xml,
+                data=result.json_data,
+                xml=result.xml_data,
                 validation_errors=result.validation_errors,
                 message="Conversion successful",
             )

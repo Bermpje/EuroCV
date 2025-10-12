@@ -165,13 +165,5 @@ class ConversionResult(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    # Provide properties for backward compatibility
-    @property
-    def json(self) -> Optional[dict[str, Any]]:
-        """Get JSON data."""
-        return self.json_data
-
-    @property
-    def xml(self) -> Optional[str]:
-        """Get XML data."""
-        return self.xml_data
+    # Note: Removed json/xml properties to avoid signature conflicts with BaseModel
+    # Use json_data and xml_data attributes directly instead
