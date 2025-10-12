@@ -14,18 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+# Copy source code and project files
 COPY src/ /app/src/
 COPY pyproject.toml /app/
 COPY README.md /app/
 
 WORKDIR /app
 
-# Install the package
+# Install the package with all dependencies from pyproject.toml
 RUN pip install --no-cache-dir .
 
 
@@ -70,4 +66,3 @@ CMD ["--help"]
 LABEL maintainer="Emiel Kremers" \
       description="Convert resumes to Europass format" \
       version="0.1.0"
-
