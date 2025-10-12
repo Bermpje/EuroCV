@@ -23,6 +23,7 @@ app = FastAPI(
 
 class ConvertRequest(BaseModel):
     """Convert request parameters."""
+
     locale: str = "en-US"
     include_photo: bool = True
     output_format: str = "json"  # json, xml, or both
@@ -32,6 +33,7 @@ class ConvertRequest(BaseModel):
 
 class ConvertResponse(BaseModel):
     """Convert response."""
+
     success: bool
     data: Optional[dict[str, Any]] = None
     xml: Optional[str] = None
@@ -41,11 +43,13 @@ class ConvertResponse(BaseModel):
 
 class ValidateRequest(BaseModel):
     """Validation request."""
+
     data: dict[str, Any]
 
 
 class ValidateResponse(BaseModel):
     """Validation response."""
+
     is_valid: bool
     errors: list[str] = []
 
@@ -100,17 +104,17 @@ async def convert(
         raise HTTPException(status_code=400, detail="No file provided")
 
     file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in ['.pdf', '.docx', '.doc']:
+    if file_ext not in [".pdf", ".docx", ".doc"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format: {file_ext}. Supported: .pdf, .docx, .doc"
+            detail=f"Unsupported file format: {file_ext}. Supported: .pdf, .docx, .doc",
         )
 
     # Validate output format
-    if output_format not in ['json', 'xml', 'both']:
+    if output_format not in ["json", "xml", "both"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid output_format: {output_format}. Must be: json, xml, or both"
+            detail=f"Invalid output_format: {output_format}. Must be: json, xml, or both",
         )
 
     # Save uploaded file to temporary location
@@ -135,29 +139,21 @@ async def convert(
 
         # Build response
         if output_format == "json":
-            return ConvertResponse(
-                success=True,
-                data=result,
-                message="Conversion successful"
-            )
+            return ConvertResponse(success=True, data=result, message="Conversion successful")
         elif output_format == "xml":
-            return ConvertResponse(
-                success=True,
-                xml=result,
-                message="Conversion successful"
-            )
+            return ConvertResponse(success=True, xml=result, message="Conversion successful")
         else:  # both
             return ConvertResponse(
                 success=True,
                 data=result.json,
                 xml=result.xml,
                 validation_errors=result.validation_errors,
-                message="Conversion successful"
+                message="Conversion successful",
             )
 
     except Exception as e:
         # Clean up temp file on error
-        if 'tmp_path' in locals():
+        if "tmp_path" in locals():
             try:
                 Path(tmp_path).unlink()
             except Exception:
@@ -180,10 +176,7 @@ async def validate_endpoint(request: ValidateRequest) -> ValidateResponse:
     try:
         is_valid, errors = validate_europass(request.data)
 
-        return ValidateResponse(
-            is_valid=is_valid,
-            errors=errors
-        )
+        return ValidateResponse(is_valid=is_valid, errors=errors)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
@@ -207,7 +200,7 @@ async def info() -> dict[str, Any]:
             "validate": "/validate",
             "health": "/healthz",
             "docs": "/docs",
-        }
+        },
     }
 
 
@@ -217,7 +210,7 @@ async def not_found_handler(request, exc):
     """Handle 404 errors."""
     return JSONResponse(
         status_code=404,
-        content={"detail": "Endpoint not found. See /docs for available endpoints."}
+        content={"detail": "Endpoint not found. See /docs for available endpoints."},
     )
 
 
@@ -225,7 +218,5 @@ async def not_found_handler(request, exc):
 async def internal_error_handler(request, exc):
     """Handle 500 errors."""
     return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error. Please try again."}
+        status_code=500, content={"detail": "Internal server error. Please try again."}
     )
-

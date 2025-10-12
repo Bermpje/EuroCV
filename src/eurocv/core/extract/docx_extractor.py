@@ -63,14 +63,16 @@ class DOCXExtractor:
 
         try:
             core_props = doc.core_properties
-            metadata.update({
-                "title": core_props.title,
-                "author": core_props.author,
-                "subject": core_props.subject,
-                "keywords": core_props.keywords,
-                "created": core_props.created,
-                "modified": core_props.modified,
-            })
+            metadata.update(
+                {
+                    "title": core_props.title,
+                    "author": core_props.author,
+                    "subject": core_props.subject,
+                    "keywords": core_props.keywords,
+                    "created": core_props.created,
+                    "modified": core_props.modified,
+                }
+            )
         except Exception:
             pass
 
@@ -98,7 +100,7 @@ class DOCXExtractor:
             author_parts = metadata["author"].split()
             if len(author_parts) >= 2:
                 resume.personal_info.first_name = author_parts[0]
-                resume.personal_info.last_name = ' '.join(author_parts[1:])
+                resume.personal_info.last_name = " ".join(author_parts[1:])
 
         # Extract sections
         sections = self._split_into_sections(text)
@@ -131,27 +133,29 @@ class DOCXExtractor:
         info = PersonalInfo()
 
         # Extract email
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
         email_matches = re.findall(email_pattern, text)
         if email_matches:
             info.email = email_matches[0]
 
         # Extract phone
-        phone_pattern = r'[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}'
+        phone_pattern = (
+            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
+        )
         phone_matches = re.findall(phone_pattern, text[:500])
         if phone_matches:
             info.phone = phone_matches[0]
 
         # Extract name (first line or lines before contact info)
-        lines = text.split('\n')
+        lines = text.split("\n")
         for line in lines[:10]:
             line = line.strip()
             if line and len(line.split()) >= 2 and len(line) < 50:
-                if not any(char.isdigit() for char in line) and '@' not in line:
+                if not any(char.isdigit() for char in line) and "@" not in line:
                     parts = line.split()
                     if len(parts) >= 2:
                         info.first_name = parts[0]
-                        info.last_name = ' '.join(parts[1:])
+                        info.last_name = " ".join(parts[1:])
                         break
 
         return info
@@ -213,18 +217,29 @@ class DOCXExtractor:
         languages = []
 
         language_names = [
-            "English", "Dutch", "German", "French", "Spanish", "Italian",
-            "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"
+            "English",
+            "Dutch",
+            "German",
+            "French",
+            "Spanish",
+            "Italian",
+            "Portuguese",
+            "Chinese",
+            "Japanese",
+            "Russian",
+            "Arabic",
         ]
 
-        cefr_pattern = r'\b([A-C][1-2])\b'
+        cefr_pattern = r"\b([A-C][1-2])\b"
 
         for lang in language_names:
-            if re.search(rf'\b{lang}\b', text, re.IGNORECASE):
+            if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
                 language = Language(language=lang)
 
-                context = text[max(0, text.lower().find(lang.lower()) - 50):
-                              text.lower().find(lang.lower()) + 100]
+                context = text[
+                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(lang.lower())
+                    + 100
+                ]
                 cefr_match = re.search(cefr_pattern, context)
                 if cefr_match:
                     level = cefr_match.group(1)
@@ -241,7 +256,7 @@ class DOCXExtractor:
         """Extract skills."""
         skills = []
 
-        skill_items = re.split(r'[,•\n]', text)
+        skill_items = re.split(r"[,•\n]", text)
 
         for item in skill_items:
             item = item.strip()
@@ -250,4 +265,3 @@ class DOCXExtractor:
                 skills.append(skill)
 
         return skills
-

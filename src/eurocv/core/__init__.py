@@ -1,2 +1,1 @@
 """Core conversion functionality."""
-

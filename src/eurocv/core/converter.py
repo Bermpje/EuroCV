@@ -108,9 +108,7 @@ def extract_resume(file_path: str, use_ocr: bool = False) -> Resume:
 
 
 def map_to_europass(
-    resume: Resume,
-    locale: str = "en-US",
-    include_photo: bool = True
+    resume: Resume, locale: str = "en-US", include_photo: bool = True
 ) -> EuropassCV:
     """Map Resume to Europass format.
 
@@ -143,4 +141,3 @@ def validate_europass(data: Union[dict[str, Any], str]) -> tuple[bool, list[str]
         return validator.validate_xml(data)
     else:
         return False, ["Invalid data type: must be dict (JSON) or str (XML)"]
-

@@ -37,7 +37,7 @@ class EuropassMapper:
             "DocumentType": "Europass CV",
             "CreationDate": datetime.utcnow().isoformat(),
             "Generator": "EuroCV",
-            "XSDVersion": "V3.3"
+            "XSDVersion": "V3.3",
         }
 
         # Learner info
@@ -52,7 +52,7 @@ class EuropassMapper:
         if resume.summary:
             learner_info["Headline"] = {
                 "Type": {"Code": "preferred", "Label": "Headline"},
-                "Description": {"Label": resume.summary[:500]}
+                "Description": {"Label": resume.summary[:500]},
             }
 
         # Work experience
@@ -63,9 +63,7 @@ class EuropassMapper:
 
         # Education
         if resume.education:
-            learner_info["Education"] = [
-                self._map_education(edu) for edu in resume.education
-            ]
+            learner_info["Education"] = [self._map_education(edu) for edu in resume.education]
 
         # Skills
         skills = self._map_skills(resume)
@@ -79,15 +77,15 @@ class EuropassMapper:
             if "Linguistic" not in learner_info["Skills"]:
                 learner_info["Skills"]["Linguistic"] = {
                     "MotherTongue": [],
-                    "ForeignLanguage": []
+                    "ForeignLanguage": [],
                 }
 
             for lang in resume.languages:
                 # If proficiency is C2/Native, consider it mother tongue
-                if lang.listening and lang.listening.upper() == 'C2':
-                    learner_info["Skills"]["Linguistic"]["MotherTongue"].append({
-                        "Description": {"Label": lang.language}
-                    })
+                if lang.listening and lang.listening.upper() == "C2":
+                    learner_info["Skills"]["Linguistic"]["MotherTongue"].append(
+                        {"Description": {"Label": lang.language}}
+                    )
                 else:
                     foreign_lang = {"Description": {"Label": lang.language}}
 
@@ -147,7 +145,10 @@ class EuropassMapper:
             if pi.postal_code:
                 address["Contact"]["PostalCode"] = pi.postal_code
             if pi.country:
-                address["Contact"]["Country"] = {"Code": pi.country, "Label": pi.country}
+                address["Contact"]["Country"] = {
+                    "Code": pi.country,
+                    "Label": pi.country,
+                }
             if address_line:
                 address["Contact"]["AddressLine"] = " ".join(address_line)
             contact_info["Address"] = address
@@ -170,7 +171,7 @@ class EuropassMapper:
             demographics["Birthdate"] = {
                 "Year": pi.date_of_birth.year,
                 "Month": f"--{pi.date_of_birth.month:02d}",
-                "Day": f"---{pi.date_of_birth.day:02d}"
+                "Day": f"---{pi.date_of_birth.day:02d}",
             }
 
         if pi.nationality:
@@ -182,11 +183,8 @@ class EuropassMapper:
         # Photo
         if self.include_photo and pi.photo:
             try:
-                photo_b64 = base64.b64encode(pi.photo).decode('utf-8')
-                identification["Photo"] = {
-                    "MimeType": "image/jpeg",
-                    "Data": photo_b64
-                }
+                photo_b64 = base64.b64encode(pi.photo).decode("utf-8")
+                identification["Photo"] = {"MimeType": "image/jpeg", "Data": photo_b64}
             except Exception:
                 pass
 
@@ -209,14 +207,14 @@ class EuropassMapper:
             period["From"] = {
                 "Year": exp.start_date.year,
                 "Month": f"--{exp.start_date.month:02d}",  # Europass format: --MM
-                "Day": f"---{exp.start_date.day:02d}"      # Europass format: ---DD
+                "Day": f"---{exp.start_date.day:02d}",  # Europass format: ---DD
             }
 
         if exp.end_date:
             period["To"] = {
                 "Year": exp.end_date.year,
                 "Month": f"--{exp.end_date.month:02d}",
-                "Day": f"---{exp.end_date.day:02d}"
+                "Day": f"---{exp.end_date.day:02d}",
             }
         elif exp.current:
             period["Current"] = True
@@ -228,7 +226,10 @@ class EuropassMapper:
         if exp.position:
             position = {"Label": exp.position}
             # Add ISCO-08 code if it can be inferred (default to software developer)
-            if any(keyword in exp.position.lower() for keyword in ['developer', 'programmer', 'software', 'engineer']):
+            if any(
+                keyword in exp.position.lower()
+                for keyword in ["developer", "programmer", "software", "engineer"]
+            ):
                 position["Code"] = "2512"  # Software developers
             work_exp["Position"] = position
 
@@ -252,7 +253,7 @@ class EuropassMapper:
                 country_code = self._get_country_code(exp.country)
                 employer["ContactInfo"]["Address"]["Contact"]["Country"] = {
                     "Code": country_code,
-                    "Label": exp.country
+                    "Label": exp.country,
                 }
 
         if employer:
@@ -277,14 +278,14 @@ class EuropassMapper:
             period["From"] = {
                 "Year": edu.start_date.year,
                 "Month": f"--{edu.start_date.month:02d}",
-                "Day": f"---{edu.start_date.day:02d}"
+                "Day": f"---{edu.start_date.day:02d}",
             }
 
         if edu.end_date:
             period["To"] = {
                 "Year": edu.end_date.year,
                 "Month": f"--{edu.end_date.month:02d}",
-                "Day": f"---{edu.end_date.day:02d}"
+                "Day": f"---{edu.end_date.day:02d}",
             }
         elif edu.current:
             period["Current"] = True
@@ -297,7 +298,7 @@ class EuropassMapper:
             education["Title"] = edu.title
         elif edu.description:
             # Use first line of description as title
-            first_line = edu.description.split('\n')[0][:100]
+            first_line = edu.description.split("\n")[0][:100]
             education["Title"] = first_line
 
         # Skills acquired (description)
@@ -317,7 +318,7 @@ class EuropassMapper:
                 country_code = self._get_country_code(edu.country)
                 organization["ContactInfo"]["Address"]["Contact"]["Country"] = {
                     "Code": country_code,
-                    "Label": edu.country
+                    "Label": edu.country,
                 }
 
         if organization:
@@ -325,7 +326,10 @@ class EuropassMapper:
 
         # Level (ISCED 2011)
         if edu.level:
-            education["Level"] = {"Code": edu.level, "Label": self._get_isced_label(edu.level)}
+            education["Level"] = {
+                "Code": edu.level,
+                "Label": self._get_isced_label(edu.level),
+            }
         else:
             # Try to infer level from title
             level = self._infer_education_level(edu.title or "")
@@ -377,8 +381,21 @@ class EuropassMapper:
         # Other skills
         if resume.skills:
             # Categorize skills
-            computer_keywords = ['python', 'java', 'javascript', 'sql', 'html', 'css', 'git',
-                                'docker', 'kubernetes', 'aws', 'azure', 'linux', 'windows']
+            computer_keywords = [
+                "python",
+                "java",
+                "javascript",
+                "sql",
+                "html",
+                "css",
+                "git",
+                "docker",
+                "kubernetes",
+                "aws",
+                "azure",
+                "linux",
+                "windows",
+            ]
 
             computer_skills = []
             other_skills = []
@@ -456,7 +473,7 @@ class EuropassMapper:
             "5": "Short-cycle tertiary education",
             "6": "Bachelor or equivalent",
             "7": "Master or equivalent",
-            "8": "Doctoral or equivalent"
+            "8": "Doctoral or equivalent",
         }
         return isced_labels.get(code, f"Level {code}")
 
@@ -475,44 +492,69 @@ class EuropassMapper:
         title_lower = title.lower()
 
         # Doctoral (ISCED 8)
-        if any(word in title_lower for word in ['phd', 'ph.d', 'doctorate', 'doctoral', 'doctor']):
+        if any(word in title_lower for word in ["phd", "ph.d", "doctorate", "doctoral", "doctor"]):
             return {"Code": "8", "Label": "Doctoral or equivalent"}
 
         # Master (ISCED 7) - check BEFORE bachelor to avoid false matches
         # Use word boundaries to avoid matching 'ma' in 'informatica'
-        master_patterns = [r'\bmaster\b', r"\bmaster's\b", r'\bmsc\b', r'\bm\.?sc\b',
-                          r'\bma\b', r'\bm\.?a\b', r'\bmba\b']
+        master_patterns = [
+            r"\bmaster\b",
+            r"\bmaster's\b",
+            r"\bmsc\b",
+            r"\bm\.?sc\b",
+            r"\bma\b",
+            r"\bm\.?a\b",
+            r"\bmba\b",
+        ]
         if any(re.search(pattern, title_lower) for pattern in master_patterns):
             return {"Code": "7", "Label": "Master or equivalent"}
 
         # Premaster is still master level
-        if 'premaster' in title_lower:
+        if "premaster" in title_lower:
             return {"Code": "7", "Label": "Master or equivalent"}
 
         # Bachelor (ISCED 6) - now more specific
         # Use word boundaries to avoid matching 'ba' in random words
-        bachelor_patterns = [r'\bbachelor\b', r"\bbachelor's\b", r'\bbsc\b', r'\bb\.?sc\b',
-                           r'\bba\b', r'\bb\.?a\b', r'\bbs\b', r'\bb\.?s\b',
-                           r'\bbict\b', r'\bb\.?ict\b']
+        bachelor_patterns = [
+            r"\bbachelor\b",
+            r"\bbachelor's\b",
+            r"\bbsc\b",
+            r"\bb\.?sc\b",
+            r"\bba\b",
+            r"\bb\.?a\b",
+            r"\bbs\b",
+            r"\bb\.?s\b",
+            r"\bbict\b",
+            r"\bb\.?ict\b",
+        ]
         if any(re.search(pattern, title_lower) for pattern in bachelor_patterns):
             # Make sure it's not "bachelor of" in a master's context
-            if not re.search(r'\bmaster\b', title_lower):
+            if not re.search(r"\bmaster\b", title_lower):
                 return {"Code": "6", "Label": "Bachelor or equivalent"}
 
         # Short-cycle tertiary (ISCED 5) - HBO, Associate
-        if any(word in title_lower for word in ['hbo', 'associate', 'hogeschool']):
+        if any(word in title_lower for word in ["hbo", "associate", "hogeschool"]):
             # But if it says Bachelor, it's level 6
-            if 'bachelor' in title_lower:
+            if "bachelor" in title_lower:
                 return {"Code": "6", "Label": "Bachelor or equivalent"}
             return {"Code": "5", "Label": "Short-cycle tertiary education"}
 
         # Upper secondary (ISCED 3)
-        if any(word in title_lower for word in ['high school', 'secondary', 'diploma', 'havo', 'vwo', 'gymnasium']):
+        if any(
+            word in title_lower
+            for word in [
+                "high school",
+                "secondary",
+                "diploma",
+                "havo",
+                "vwo",
+                "gymnasium",
+            ]
+        ):
             return {"Code": "3", "Label": "Upper secondary education"}
 
         # Vocational secondary (ISCED 3/4)
-        if any(word in title_lower for word in ['mbo', 'vocational', 'technical college']):
+        if any(word in title_lower for word in ["mbo", "vocational", "technical college"]):
             return {"Code": "3", "Label": "Upper secondary education"}
 
         return None
-
