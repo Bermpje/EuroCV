@@ -71,6 +71,41 @@ class EuropassMapper:
         if skills:
             learner_info["Skills"] = skills
         
+        # Languages (add to existing Skills section if present)
+        if resume.languages:
+            if "Skills" not in learner_info:
+                learner_info["Skills"] = {}
+            if "Linguistic" not in learner_info["Skills"]:
+                learner_info["Skills"]["Linguistic"] = {
+                    "MotherTongue": [],
+                    "ForeignLanguage": []
+                }
+            
+            for lang in resume.languages:
+                # If proficiency is C2/Native, consider it mother tongue
+                if lang.listening and lang.listening.upper() == 'C2':
+                    learner_info["Skills"]["Linguistic"]["MotherTongue"].append({
+                        "Description": {"Label": lang.language}
+                    })
+                else:
+                    foreign_lang = {"Description": {"Label": lang.language}}
+                    
+                    # Add CEFR proficiency levels if available
+                    if any([lang.listening, lang.reading, lang.speaking, lang.writing]):
+                        proficiency = {}
+                        if lang.listening:
+                            proficiency["Listening"] = lang.listening
+                        if lang.reading:
+                            proficiency["Reading"] = lang.reading
+                        if lang.speaking:
+                            proficiency["SpokenInteraction"] = lang.speaking
+                            proficiency["SpokenProduction"] = lang.speaking
+                        if lang.writing:
+                            proficiency["Writing"] = lang.writing
+                        foreign_lang["ProficiencyLevel"] = proficiency
+                    
+                    learner_info["Skills"]["Linguistic"]["ForeignLanguage"].append(foreign_lang)
+        
         europass.LearnerInfo = learner_info
         
         return europass

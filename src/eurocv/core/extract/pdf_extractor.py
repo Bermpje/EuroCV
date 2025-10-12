@@ -172,9 +172,12 @@ class PDFExtractor:
         if "education" in sections:
             resume.education = self._extract_education(sections["education"])
         
-        # Extract languages
+        # Extract languages (check section first, then full text)
         if "language" in sections:
             resume.languages = self._extract_languages(sections["language"])
+        else:
+            # Try extracting from full text (languages might be in sidebar)
+            resume.languages = self._extract_languages(text)
         
         # Extract skills
         if "skill" in sections:
@@ -209,20 +212,110 @@ class PDFExtractor:
         if phone_matches:
             info.phone = phone_matches[0]
         
-        # Extract name (heuristic: first line or lines before contact info)
-        lines = text.split('\n')
-        for i, line in enumerate(lines[:10]):  # Check first 10 lines
-            line = line.strip()
-            if line and len(line.split()) >= 2 and len(line) < 50:
-                # Likely a name (2+ words, not too long)
-                if not any(char.isdigit() for char in line) and '@' not in line:
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        info.first_name = parts[0]
-                        info.last_name = ' '.join(parts[1:])
-                        break
+        # Extract name (improved heuristic)
+        info.first_name, info.last_name = self._extract_name(text)
         
         return info
+    
+    def _extract_name(self, text: str) -> tuple[str, str]:
+        """Extract person name from text using improved heuristics.
+        
+        Args:
+            text: Resume text
+            
+        Returns:
+            Tuple of (first_name, last_name)
+        """
+        lines = text.split('\n')
+        candidates = []
+        
+        # Common sidebar headings and phrases to skip
+        sidebar_headings = [
+            'contact', 'top skills', 'skills', 'languages', 'certifications',
+            'certificates', 'summary', 'profile', 'experience', 'education',
+            'expertise', 'competencies', 'about', 'honors', 'awards',
+            'other languages', 'spoken english', 'native or', 'limited working'
+        ]
+        
+        for i, line in enumerate(lines[:30]):  # Check first 30 lines
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                continue
+            
+            # Skip common section headings
+            if line.lower() in sidebar_headings:
+                continue
+            
+            # Skip lines with URLs or common non-name patterns
+            skip_patterns = [
+                r'www\.',
+                r'http',
+                r'\.com',
+                r'\.nl',
+                r'\.org',
+                r'linkedin',
+                r'\(.*\)',  # Text in parentheses
+                r'@',       # Email
+                r'\d{4}',   # Years
+                r'page\s+\d+',  # Page numbers
+                r'&',       # Ampersands (often in titles)
+                r'\|',      # Pipes (often in titles)
+            ]
+            
+            if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
+                continue
+            
+            # Check if line looks like a name
+            words = line.split()
+            
+            # Name should be exactly 2-3 words, each capitalized
+            if 2 <= len(words) <= 3:
+                # Check if all words are title case and mostly alpha
+                if all(word[0].isupper() and word.replace('-', '').replace("'", '').isalpha() 
+                       for word in words if word):
+                    # Calculate a score for this candidate
+                    score = 0
+                    
+                    # Strongly prefer exactly 2 words (First Last)
+                    if len(words) == 2:
+                        score += 10
+                    elif len(words) == 3:
+                        score += 5
+                    
+                    # Prefer short words (first and last names are usually short)
+                    if all(3 <= len(word) <= 15 for word in words):
+                        score += 5
+                    
+                    # Prefer lines that are standalone (not too much around them)
+                    if len(line) < 30:
+                        score += 3
+                    
+                    # STRONGLY prefer lines 20-25 (typical name position in LinkedIn)
+                    if 20 <= i <= 25:
+                        score += 20  # Strong bonus for likely name position
+                    elif i >= 15:
+                        score += 4  # Prefer middle section
+                    
+                    # Check if words look like common first names (heuristic: ends with common suffixes)
+                    first_word = words[0]
+                    # Common name endings
+                    if any(first_word.endswith(suffix) for suffix in ['el', 'an', 'en', 'on', 'er', 'le', 'ie']):
+                        score += 2
+                    
+                    candidates.append((score, words, i, line))
+        
+        # Sort by score and pick best candidate
+        if candidates:
+            candidates.sort(reverse=True)
+            best_words = candidates[0][1]
+            
+            first_name = best_words[0]
+            last_name = ' '.join(best_words[1:])
+            return first_name, last_name
+        
+        return None, None
     
     def _split_into_sections(self, text: str) -> Dict[str, str]:
         """Split resume text into sections.
@@ -244,12 +337,16 @@ class PDFExtractor:
             "language": r"(?i)(languages|language\s+skills)",
         }
         
-        # Find section positions
+        # Find section positions (use FIRST match of each section only)
         section_positions = []
+        found_sections = set()
         for section_key, pattern in section_patterns.items():
             matches = list(re.finditer(pattern, text))
-            for match in matches:
+            if matches and section_key not in found_sections:
+                # Take only the FIRST match for each section type
+                match = matches[0]
                 section_positions.append((match.start(), section_key, match.group()))
+                found_sections.add(section_key)
         
         # Sort by position
         section_positions.sort()
@@ -281,16 +378,113 @@ class PDFExtractor:
         """
         experiences = []
         
-        # Split into entries (heuristic: look for date patterns)
-        date_pattern = r'\b(20\d{2}|19\d{2})\b|\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b'
+        # Split text into potential entries by looking for date ranges
+        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
+        date_range_pattern = r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*[-–—]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|Present)'
         
-        # For now, create a single entry with all content
-        # TODO: Implement better entry splitting
-        if text.strip():
-            exp = WorkExperience(description=text.strip()[:1000])  # Limit length
+        entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
+        
+        # Process entries
+        i = 0
+        while i < len(entries):
+            # Check if we have a date range match (3 parts: before, start_date, end_date)
+            if i + 2 < len(entries):
+                before_text = entries[i].strip()
+                start_date_str = entries[i + 1].strip() if i + 1 < len(entries) else None
+                end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
+                
+                # Get the content after the dates (description)
+                content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
+                
+                if start_date_str and end_date_str:
+                    exp = WorkExperience()
+                    
+                    # Parse dates
+                    exp.start_date = self._parse_date(start_date_str)
+                    if end_date_str.lower() == 'present':
+                        exp.current = True
+                        exp.end_date = None
+                    else:
+                        exp.end_date = self._parse_date(end_date_str)
+                    
+                    # Extract position and employer from text before dates
+                    lines_before = [l.strip() for l in before_text.split('\n') if l.strip()]
+                    if lines_before:
+                        # Last non-empty line before dates is usually the position
+                        exp.position = lines_before[-1] if lines_before else None
+                        
+                        # Line before position might be employer
+                        if len(lines_before) > 1:
+                            exp.employer = lines_before[-2]
+                    
+                    # Extract location and description from content after dates
+                    content_lines = [l.strip() for l in content_after.split('\n')[:20] if l.strip()]
+                    
+                    # First line after dates often contains location
+                    if content_lines:
+                        first_line = content_lines[0]
+                        # Check if it looks like a location
+                        if any(word in first_line for word in ['Netherlands', 'Holland', 'Amsterdam', 'Utrecht']):
+                            location_parts = first_line.split(',')
+                            if len(location_parts) >= 2:
+                                exp.city = location_parts[0].strip()
+                                exp.country = location_parts[-1].strip()
+                            content_lines = content_lines[1:]  # Remove location from description
+                    
+                    # Remaining lines are description/activities
+                    if content_lines:
+                        exp.description = '\n'.join(content_lines[:10])  # Limit to first 10 lines
+                    
+                    experiences.append(exp)
+                    i += 4  # Skip the processed parts
+                    continue
+            
+            i += 1
+        
+        # Fallback: if no structured entries found, create one with all text
+        if not experiences and text.strip():
+            exp = WorkExperience(description=text.strip()[:1000])
             experiences.append(exp)
         
         return experiences
+    
+    def _parse_date(self, date_str: str) -> Optional['date']:
+        """Parse date string to date object.
+        
+        Args:
+            date_str: Date string like "January 2020" or "Jan 2020"
+            
+        Returns:
+            date object or None
+        """
+        from datetime import datetime
+        from dateutil import parser
+        
+        try:
+            # Try to parse with dateutil
+            parsed = parser.parse(date_str, default=datetime(2000, 1, 1))
+            return parsed.date()
+        except:
+            # Try to extract at least year and month
+            year_match = re.search(r'\b(19|20)\d{2}\b', date_str)
+            if year_match:
+                year = int(year_match.group())
+                
+                month_names = {
+                    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+                }
+                
+                for month_name, month_num in month_names.items():
+                    if month_name in date_str.lower():
+                        from datetime import date as date_class
+                        return date_class(year, month_num, 1)
+                
+                # Just year
+                from datetime import date as date_class
+                return date_class(year, 1, 1)
+        
+        return None
     
     def _extract_education(self, text: str) -> List[Education]:
         """Extract education entries.
@@ -303,9 +497,79 @@ class PDFExtractor:
         """
         education_list = []
         
-        # For now, create a single entry
-        # TODO: Implement better entry splitting
-        if text.strip():
+        # Common university/school keywords
+        institution_keywords = [
+            'university', 'universiteit', 'college', 'school', 'hogeschool',
+            'institute', 'academy', 'polytechnic'
+        ]
+        
+        # Split by lines and look for institution names
+        lines = text.split('\n')
+        current_edu = None
+        current_lines = []
+        
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+            
+            # Check if line contains an institution name
+            is_institution = any(keyword in line_stripped.lower() for keyword in institution_keywords)
+            
+            # Check if line contains a degree pattern
+            degree_patterns = [
+                r"bachelor", r"master", r"phd", r"doctorate",
+                r"degree", r"msc", r"bsc", r"ma", r"ba", r"mba"
+            ]
+            has_degree = any(re.search(pattern, line_stripped, re.IGNORECASE) for pattern in degree_patterns)
+            
+            # Start new entry if we find an institution or degree
+            if is_institution or (has_degree and not current_edu):
+                # Save previous entry if exists
+                if current_edu and current_lines:
+                    current_edu.description = '\n'.join(current_lines[:10])
+                    education_list.append(current_edu)
+                
+                # Start new entry
+                current_edu = Education()
+                current_lines = []
+                
+                if is_institution:
+                    current_edu.organization = line_stripped
+                elif has_degree:
+                    current_edu.title = line_stripped
+            
+            # Accumulate lines for current entry
+            if current_edu:
+                # Try to extract dates from this line
+                date_match = re.search(r'(\d{4})\s*[-–—]\s*(\d{4})', line_stripped)
+                if date_match:
+                    start_year = int(date_match.group(1))
+                    end_year = int(date_match.group(2))
+                    from datetime import date as date_class
+                    current_edu.start_date = date_class(start_year, 9, 1)  # Assume September start
+                    current_edu.end_date = date_class(end_year, 6, 30)  # Assume June end
+                elif re.search(r'\b(\d{4})\b', line_stripped):
+                    # Single year mention
+                    year = int(re.search(r'\b(\d{4})\b', line_stripped).group(1))
+                    if not current_edu.end_date:
+                        from datetime import date as date_class
+                        current_edu.end_date = date_class(year, 6, 30)
+                
+                # Check for degree in line if title not set
+                if not current_edu.title and has_degree:
+                    current_edu.title = line_stripped
+                
+                current_lines.append(line_stripped)
+        
+        # Don't forget last entry
+        if current_edu:
+            if current_lines:
+                current_edu.description = '\n'.join(current_lines[:10])
+            education_list.append(current_edu)
+        
+        # Fallback: if no structured entries found, create one with all text
+        if not education_list and text.strip():
             edu = Education(description=text.strip()[:1000])
             education_list.append(edu)
         
@@ -325,8 +589,24 @@ class PDFExtractor:
         # Common languages
         language_names = [
             "English", "Dutch", "German", "French", "Spanish", "Italian",
-            "Portuguese", "Chinese", "Japanese", "Russian", "Arabic"
+            "Portuguese", "Chinese", "Japanese", "Russian", "Arabic", "Nederlands"
         ]
+        
+        # Proficiency level mappings to CEFR
+        proficiency_map = {
+            'native': 'C2',
+            'bilingual': 'C2',
+            'fluent': 'C1',
+            'professional': 'C1',
+            'advanced': 'B2',
+            'intermediate': 'B1',
+            'elementary': 'A2',
+            'basic': 'A1',
+            'limited': 'B1',
+            'full professional': 'C1',
+            'professional working': 'B2',
+            'limited working': 'B1',
+        }
         
         # CEFR levels
         cefr_pattern = r'\b([A-C][1-2])\b'
@@ -335,16 +615,28 @@ class PDFExtractor:
             if re.search(rf'\b{lang}\b', text, re.IGNORECASE):
                 language = Language(language=lang)
                 
-                # Try to find CEFR level near the language name
-                context = text[max(0, text.lower().find(lang.lower()) - 50):
-                              text.lower().find(lang.lower()) + 100]
-                cefr_match = re.search(cefr_pattern, context)
-                if cefr_match:
-                    level = cefr_match.group(1)
-                    language.listening = level
-                    language.reading = level
-                    language.speaking = level
-                    language.writing = level
+                # Find context around the language name (100 chars before and after)
+                lang_pos = text.lower().find(lang.lower())
+                if lang_pos >= 0:
+                    context = text[max(0, lang_pos - 100):lang_pos + 150]
+                    
+                    # Try to find CEFR level
+                    cefr_match = re.search(cefr_pattern, context)
+                    if cefr_match:
+                        level = cefr_match.group(1)
+                        language.listening = level
+                        language.reading = level
+                        language.speaking = level
+                        language.writing = level
+                    else:
+                        # Try to find proficiency description
+                        for prof_text, cefr_level in proficiency_map.items():
+                            if re.search(rf'\b{prof_text}\b', context, re.IGNORECASE):
+                                language.listening = cefr_level
+                                language.reading = cefr_level
+                                language.speaking = cefr_level
+                                language.writing = cefr_level
+                                break
                 
                 languages.append(language)
         
