@@ -32,13 +32,9 @@ source venv/bin/activate
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install dependencies
-echo "Installing dependencies..."
-pip install -r requirements-dev.txt
-
-# Install package in editable mode
-echo "Installing eurocv in editable mode..."
-pip install -e .
+# Install package with all dependencies in editable mode
+echo "Installing eurocv with dev dependencies..."
+pip install -e ".[dev,ocr]"
 
 # Install OCR dependencies (optional)
 echo ""
