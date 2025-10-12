@@ -1,6 +1,10 @@
 [lint]
 select = ["E", "F", "W", "I", "UP"]
+# Ignore E501 (line too long) - acceptable for regex patterns, field mappings, and long lists
+ignore = ["E501"]
 
-# Allow longer lines for regex patterns in pdf_extractor
-[lint.per-file-ignores]
-"src/eurocv/core/extract/pdf_extractor.py" = ["E501"]
+# Alternative: only ignore in specific files
+# [lint.per-file-ignores]
+# "src/eurocv/core/extract/*.py" = ["E501"]
+# "src/eurocv/core/map/*.py" = ["E501"]
+# "src/eurocv/core/validate/*.py" = ["E501"]
