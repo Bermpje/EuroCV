@@ -24,6 +24,7 @@ MANIFEST
 
 # Virtual environments
 venv/
+.venv/
 env/
 ENV/
 env.bak/
@@ -86,4 +87,20 @@ temp/
 # Sample files (for local testing)
 samples/
 test_files/
+profile.pdf
+*.pdf
+!docs/*.pdf
+
+# Test output files
+profile_europass*.json
+*_test.json
+*_output.json
+
+# UV (modern Python package manager)
+.uv/
+uv.lock
+
+# Python cache
+.python-version
+pyrightconfig.json
 
