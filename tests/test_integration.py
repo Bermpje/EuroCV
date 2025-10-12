@@ -368,3 +368,138 @@ def test_mapper_with_all_fields():
     assert len(xml_data) > 0
     assert "Europass" in xml_data
 
+
+def test_mapper_with_multiple_languages():
+    """Test mapper with multiple languages and proficiency levels."""
+    resume = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User"),
+        languages=[
+            Language(language="English", listening="C2", reading="C2", speaking="C1", writing="C1"),
+            Language(language="Spanish", listening="B2", reading="B2", speaking="B1", writing="B1"),
+            Language(language="French", level="A2"),
+            Language(language="German", is_native=True)
+        ]
+    )
+    
+    from eurocv.core.map.europass_mapper import EuropassMapper
+    mapper = EuropassMapper()
+    europass = mapper.map(resume)
+    
+    json_data = europass.to_json()
+    linguistic = json_data.get("LearnerInfo", {}).get("Skills", {}).get("Linguistic", {})
+    
+    assert "MotherTongue" in linguistic or "ForeignLanguage" in linguistic
+
+
+def test_mapper_locale_variations():
+    """Test mapper with different locales."""
+    resume = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User"),
+        work_experience=[
+            WorkExperience(
+                position="Developer",
+                employer="Company",
+                start_date="2020-01-01",
+                end_date="2021-12-31"
+            )
+        ]
+    )
+    
+    from eurocv.core.map.europass_mapper import EuropassMapper
+    
+    # Test different locales
+    for locale in ["en-US", "nl-NL", "de-DE", "fr-FR"]:
+        mapper = EuropassMapper(locale=locale)
+        europass = mapper.map(resume)
+        json_data = europass.to_json()
+        
+        assert "DocumentInfo" in json_data
+        assert "LearnerInfo" in json_data
+
+
+def test_converter_with_validation_errors():
+    """Test converter with validation enabled."""
+    from eurocv.core.converter import convert_to_europass, extract_resume
+    
+    # Create a resume with potential validation issues
+    resume = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+    
+    # Convert with validation
+    from eurocv.core.map.europass_mapper import EuropassMapper
+    mapper = EuropassMapper()
+    europass = mapper.map(resume)
+    
+    # Validate
+    from eurocv.core.validate.schema_validator import SchemaValidator
+    validator = SchemaValidator()
+    is_valid, errors = validator.validate_json(europass.to_json())
+    
+    # Should validate (may have errors but shouldn't crash)
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_europass_xml_with_special_characters():
+    """Test Europass XML generation with special characters."""
+    resume = Resume(
+        personal_info=PersonalInfo(
+            first_name="José",
+            last_name="O'Brien",
+            email="jose@example.com"
+        ),
+        work_experience=[
+            WorkExperience(
+                position="Developer & Architect",
+                employer="Tech <Company>",
+                description="Worked on A&B project"
+            )
+        ]
+    )
+    
+    from eurocv.core.map.europass_mapper import EuropassMapper
+    mapper = EuropassMapper()
+    europass = mapper.map(resume)
+    
+    xml_string = europass.to_xml()
+    
+    # XML should be valid (special chars escaped)
+    assert isinstance(xml_string, str)
+    assert len(xml_string) > 0
+    assert "Europass" in xml_string
+
+
+def test_converter_output_format_variations():
+    """Test converter with all output format options."""
+    from eurocv.core.converter import convert_to_europass
+    from eurocv.core.models import ConversionResult
+    
+    resume = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+    
+    # Map to Europass first
+    from eurocv.core.map.europass_mapper import EuropassMapper
+    mapper = EuropassMapper()
+    europass = mapper.map(resume)
+    
+    # Test JSON format
+    json_output = europass.to_json()
+    assert isinstance(json_output, dict)
+    
+    # Test XML format
+    xml_output = europass.to_xml()
+    assert isinstance(xml_output, str)
+    
+    # Test both formats in ConversionResult
+    result = ConversionResult(
+        json_data=json_output,
+        xml_data=xml_output,
+        validation_errors=[],
+        warnings=[]
+    )
+    
+    assert result.json_data is not None
+    assert result.xml_data is not None
+
