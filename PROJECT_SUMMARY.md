@@ -2,7 +2,7 @@
 
 ## Overview
 
-**EuroCV** is a complete CLI/API tool for converting resumes (PDF/DOCX) into Europass XML/JSON format, built in Python with a focus on reusability, GDPR compliance, and Dutch market needs.
+**EuroCV** is a complete CLI/API tool for converting resumes (PDF/DOCX) into Europass XML/JSON format, built in Python with a focus on reusability, GDPR compliance, and European standardization.
 
 ## What Was Built
 
@@ -167,9 +167,7 @@ Comprehensive test coverage using pytest:
 
 2. **MANIFEST.in** - Package file inclusion rules
 
-3. **requirements.txt** - Core dependencies
-
-4. **requirements-dev.txt** - Development dependencies
+3. **pyproject.toml** - Project metadata and dependencies (single source of truth)
 
 ## Project Structure
 
@@ -200,18 +198,18 @@ eurocv/
 
 ## Key Features Implemented
 
-✅ **Multi-format Support**: PDF and DOCX input  
-✅ **Europass Compliant**: JSON and XML output with validation  
-✅ **Three Interfaces**: CLI, Python API, HTTP service  
-✅ **Docker Ready**: Production and development images  
-✅ **OCR Support**: For scanned PDFs (Tesseract)  
-✅ **GDPR/AVG Compliant**: Stateless, no-photo option  
-✅ **Dutch Support**: nl-NL locale for date/number formatting  
-✅ **Batch Processing**: Parallel processing support  
-✅ **Schema Validation**: Against Europass standards  
-✅ **Comprehensive Tests**: Unit and integration tests  
-✅ **CI/CD**: Automated testing, building, and publishing  
-✅ **Documentation**: Complete guides and examples  
+✅ **Multi-format Support**: PDF and DOCX input
+✅ **Europass Compliant**: JSON and XML output with validation
+✅ **Three Interfaces**: CLI, Python API, HTTP service
+✅ **Docker Ready**: Production and development images
+✅ **OCR Support**: For scanned PDFs (Tesseract)
+✅ **GDPR/AVG Compliant**: Stateless, no-photo option
+✅ **Multi-locale Support**: Multiple locales including nl-NL for date/number formatting
+✅ **Batch Processing**: Parallel processing support
+✅ **Schema Validation**: Against Europass standards
+✅ **Comprehensive Tests**: Unit and integration tests
+✅ **CI/CD**: Automated testing, building, and publishing
+✅ **Documentation**: Complete guides and examples
 
 ## Technologies Used
 
@@ -338,9 +336,8 @@ Emiel Kremers
 
 ---
 
-**Project Status**: ✅ Complete and ready for use  
-**Version**: 0.1.0  
-**Last Updated**: 2024  
-**Lines of Code**: ~5000+  
+**Project Status**: ✅ Complete and ready for use
+**Version**: 0.1.0
+**Last Updated**: 2024
+**Lines of Code**: ~5000+
 **Test Coverage**: Comprehensive (unit + integration)
-

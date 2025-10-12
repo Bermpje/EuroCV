@@ -1,183 +1,214 @@
 # Contributing to EuroCV
 
-Thank you for your interest in contributing to EuroCV! This document provides guidelines for contributing to the project.
+Thanks for your interest in contributing to EuroCV! This guide will help you set up your development environment and understand our workflow.
 
-## Getting Started
+---
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/eurocv.git
-   cd eurocv
-   ```
+## 🚀 Quick Start
 
-3. **Create a virtual environment** and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -e ".[dev,ocr]"
-   ```
-
-4. **Create a branch** for your changes:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-## Development Workflow
-
-### Code Style
-
-We use the following tools to maintain code quality:
-
-- **Black** for code formatting
-- **Ruff** for linting
-- **MyPy** for type checking
-
-Run these before committing:
+### 1. Clone and Setup
 
 ```bash
-# Format code
-black src/ tests/
-
-# Lint
-ruff check src/ tests/
-
-# Type check
-mypy src/
+git clone https://github.com/Bermpje/EuroCV.git
+cd eurocv
+uv venv
+source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+make install  # Installs dependencies and pre-commit hooks
 ```
 
-### Testing
-
-We use pytest for testing. Write tests for all new features and bug fixes.
+### 2. Create a Feature Branch
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=eurocv --cov-report=html
-
-# Run specific test file
-pytest tests/test_models.py
-
-# Run specific test
-pytest tests/test_models.py::test_personal_info_creation
+git checkout -b feature/your-feature-name
 ```
 
-### Running Locally
+---
 
-#### CLI
+## ✅ Development Workflow
+
+### Run Checks Locally (Same as CI)
+
+We have **three ways** to run the same checks that GitHub Actions runs:
+
+#### Option 1: Makefile (Recommended)
+
 ```bash
-# Run CLI
-python -m eurocv.cli.main convert test.pdf --out output.json
+make check          # Run all checks
+make lint           # Run ruff
+make format         # Run black
+make type-check     # Run mypy
+make test           # Run pytest
 ```
 
-#### API Server
+#### Option 2: Check Script
+
 ```bash
-# Run API server with auto-reload
-uvicorn eurocv.api.main:app --reload
+./scripts/check.sh  # Runs all CI checks
 ```
 
-#### Docker
+#### Option 3: Pre-commit (Automatic)
+
+Pre-commit hooks run automatically on `git commit`:
+
 ```bash
-# Build and run
-docker build -t eurocv:dev .
-docker run --rm -v $PWD:/data eurocv:dev convert /data/test.pdf
+git commit -m "your message"  # Hooks run automatically
 ```
 
-## Pull Request Process
+To run manually:
 
-1. **Update tests**: Add or update tests for your changes
-2. **Update documentation**: Update README.md, docstrings, and comments
-3. **Run the test suite**: Ensure all tests pass
-4. **Update CHANGELOG.md**: Add your changes under "Unreleased"
-5. **Commit your changes**: Use clear, descriptive commit messages
-6. **Push to your fork**: `git push origin feature/your-feature-name`
-7. **Open a Pull Request**: Provide a clear description of your changes
-
-### Commit Message Guidelines
-
-Use clear, descriptive commit messages following this format:
-
-```
-type(scope): brief description
-
-Longer description if needed
-
-Fixes #issue_number
+```bash
+pre-commit run --all-files
 ```
 
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
+---
 
-Examples:
-```
-feat(extractor): add support for OCR in PDF extraction
-fix(mapper): correct date formatting for nl-NL locale
-docs(readme): add Docker usage examples
+## 🔧 Development Tools
+
+### Linting (Ruff)
+
+```bash
+ruff check src/              # Check for issues
+ruff check src/ --fix        # Auto-fix issues
 ```
 
-## Code Review
+### Formatting (Black)
 
-All submissions require review. We use GitHub pull requests for this purpose.
+```bash
+black src/                   # Format code
+black --check src/           # Check formatting
+```
 
-Reviewers will check for:
-- Code quality and style
-- Test coverage
-- Documentation
-- Performance implications
-- Security considerations (especially for file handling)
+### Type Checking (MyPy)
 
-## Bug Reports
+```bash
+mypy src/                    # Check types
+```
 
-When filing a bug report, please include:
+### Testing (Pytest)
 
-1. **Description**: Clear description of the issue
-2. **Steps to reproduce**: Minimal example to reproduce the bug
-3. **Expected behavior**: What should happen
-4. **Actual behavior**: What actually happens
-5. **Environment**: OS, Python version, package versions
-6. **Sample files**: If relevant (anonymized resumes)
+```bash
+pytest                       # Run all tests
+pytest -x                    # Stop on first failure
+pytest -k "test_name"        # Run specific test
+pytest --cov=eurocv          # With coverage
+```
 
-## Feature Requests
+---
 
-We welcome feature requests! Please include:
+## 📋 Code Quality Standards
 
-1. **Use case**: Why is this feature needed?
-2. **Proposed solution**: How should it work?
-3. **Alternatives**: Other solutions you've considered
-4. **Additional context**: Any other relevant information
+All code must pass these checks (same as CI):
 
-## Code of Conduct
+- ✅ **Ruff**: No linting errors (E501 line length ignored for patterns)
+- ✅ **Black**: Code formatted correctly
+- ✅ **MyPy**: No critical type errors (warnings are OK)
+- ✅ **Pytest**: All tests pass
+- ✅ **Pre-commit**: All hooks pass
 
-### Our Pledge
+---
 
-We pledge to make participation in our project a harassment-free experience for everyone.
+## 🌿 Git Workflow
 
-### Our Standards
+### 1. Feature Development
 
-Examples of behavior that contributes to a positive environment:
-- Using welcoming and inclusive language
-- Being respectful of differing viewpoints
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the community
+```bash
+git checkout -b feature/your-feature
+# Make changes
+make check  # Run all checks
+git add .
+git commit -m "feat: your feature description"
+```
 
-Examples of unacceptable behavior:
-- Trolling, insulting/derogatory comments, and personal attacks
-- Public or private harassment
-- Publishing others' private information without permission
+### 2. Push and Create PR
 
-## Questions?
+```bash
+git push origin feature/your-feature
+# Create Pull Request on GitHub
+```
 
-Feel free to open an issue with the "question" label if you need help or clarification.
+### 3. PR Review
 
-## License
+- CI checks must pass ✅
+- Code review required
+- All conversations must be resolved
+- Squash and merge to main
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+---
 
+## 📝 Commit Message Format
+
+Follow conventional commits:
+
+```
+feat: add new extraction method
+fix: resolve PDF parsing issue
+docs: update README
+test: add tests for mapper
+refactor: improve code structure
+style: fix formatting
+ci: update GitHub Actions
+```
+
+---
+
+## 🔍 CI/CD Pipeline
+
+Our CI runs on:
+- ✅ Push to `main`, `develop`, `feature/**`
+- ✅ Pull requests to `main`, `develop`
+
+Checks:
+- **Tests**: Multiple OS (Ubuntu, macOS, Windows) × Python (3.9-3.12)
+- **Linting**: Ruff
+- **Formatting**: Black
+- **Type Checking**: MyPy
+- **Docker**: Build and test
+
+---
+
+## 🛠️ Troubleshooting
+
+### Pre-commit hooks failing?
+
+```bash
+pre-commit run --all-files  # See what's failing
+make lint-fix               # Auto-fix linting
+make format                 # Auto-format
+```
+
+### Tests failing?
+
+```bash
+pytest -v                   # Verbose output
+pytest --lf                 # Run last failed
+pytest -x                   # Stop on first failure
+```
+
+### Clean build artifacts
+
+```bash
+make clean
+```
+
+---
+
+## 📚 Additional Resources
+
+- **Project Structure**: See `PROJECT_SUMMARY.md`
+- **Usage Examples**: See `docs/USAGE.md`
+- **API Documentation**: See `docs/API.md`
+- **Europass Schema**: See `docs/EUROPASS_SCHEMA_V3.4.md`
+
+---
+
+## 💡 Need Help?
+
+- Open an issue on GitHub
+- Check existing issues and PRs
+- Review the documentation in `docs/`
+
+---
+
+## 🎉 Thank You!
+
+Your contributions make EuroCV better for everyone! 🚀

@@ -71,3 +71,65 @@ def test_map_to_europass_without_photo():
     
     assert "Photo" not in identification
 
+
+@patch('eurocv.core.extract.pdf_extractor.PDFExtractor.extract')
+@patch('eurocv.core.map.europass_mapper.EuropassMapper.map')
+@patch('pathlib.Path.exists', return_value=True)
+def test_convert_to_europass_json(mock_exists, mock_map, mock_extract):
+    """Test full conversion to JSON."""
+    from eurocv.core.models import EuropassCV
+    
+    mock_resume = Resume(personal_info=PersonalInfo(first_name="Test", last_name="User"))
+    mock_extract.return_value = mock_resume
+    
+    mock_europass = EuropassCV()
+    mock_map.return_value = mock_europass
+    
+    result = convert_to_europass("test.pdf", output_format="json", validate=False)
+    
+    assert isinstance(result, dict)
+
+
+@patch('eurocv.core.extract.pdf_extractor.PDFExtractor.extract')
+@patch('eurocv.core.map.europass_mapper.EuropassMapper.map')
+@patch('pathlib.Path.exists', return_value=True)
+def test_convert_to_europass_xml(mock_exists, mock_map, mock_extract):
+    """Test full conversion to XML."""
+    from eurocv.core.models import EuropassCV
+    
+    mock_resume = Resume(personal_info=PersonalInfo(first_name="Test", last_name="User"))
+    mock_extract.return_value = mock_resume
+    
+    mock_europass = EuropassCV()
+    mock_map.return_value = mock_europass
+    
+    result = convert_to_europass("test.pdf", output_format="xml", validate=False)
+    
+    assert isinstance(result, str)
+
+
+@patch('eurocv.core.extract.pdf_extractor.PDFExtractor.extract')
+@patch('eurocv.core.map.europass_mapper.EuropassMapper.map')
+@patch('pathlib.Path.exists', return_value=True)
+def test_convert_to_europass_both(mock_exists, mock_map, mock_extract):
+    """Test full conversion to both formats."""
+    from eurocv.core.models import EuropassCV, ConversionResult
+    
+    mock_resume = Resume(personal_info=PersonalInfo(first_name="Test", last_name="User"))
+    mock_extract.return_value = mock_resume
+    
+    mock_europass = EuropassCV()
+    mock_map.return_value = mock_europass
+    
+    result = convert_to_europass("test.pdf", output_format="both", validate=False)
+    
+    assert isinstance(result, ConversionResult)
+    assert result.json_data is not None
+    assert result.xml_data is not None
+
+
+def test_convert_to_europass_file_not_found():
+    """Test conversion with non-existent file."""
+    with pytest.raises(FileNotFoundError):
+        convert_to_europass("nonexistent.pdf")
+

@@ -130,12 +130,12 @@ eurocv/
 
 ## Project Status
 
-**Current Version**: 0.1.0  
-**Status**: ✅ **PRODUCTION READY**  
-**Schema Compliance**: Europass XML v3.4 ✅  
-**Lines of Code**: ~5000+  
-**Test Coverage**: Comprehensive unit + integration tests  
-**Documentation**: Complete  
+**Current Version**: 0.1.0
+**Status**: ✅ **PRODUCTION READY**
+**Schema Compliance**: Europass XML v3.4 ✅
+**Lines of Code**: ~5000+
+**Test Coverage**: Comprehensive unit + integration tests
+**Documentation**: Complete
 
 ## Key Requirements - ALL MET ✅
 
@@ -192,8 +192,7 @@ eurocv/
 
 ### Configuration
 - pyproject.toml
-- requirements.txt
-- requirements-dev.txt
+- pyproject.toml (all dependencies)
 - MANIFEST.in
 - .gitignore
 - .dockerignore
@@ -267,7 +266,7 @@ GET /healthz → health status
 
 ---
 
-**Project Status**: ✅ **COMPLETE AND PRODUCTION READY**  
-**Last Updated**: 2024-10-12  
-**Total Development Time**: ~2 hours  
+**Project Status**: ✅ **COMPLETE AND PRODUCTION READY**
+**Last Updated**: 2024-10-12
+**Total Development Time**: ~2 hours
 **All Core Features**: ✅ Implemented and Tested

@@ -5,15 +5,16 @@ on:
     branches:
       - main
       - develop
+      - 'feature/**'
     tags:
       - 'v*'
   pull_request:
     branches:
       - main
+      - develop
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -41,7 +42,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -51,6 +52,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -64,5 +66,9 @@ jobs:
       - name: Test image
         if: github.event_name != 'pull_request'
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --version
-
+          # Extract the first tag from the metadata output (the branch-specific tag)
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "Testing image: $FIRST_TAG"
+          docker run --rm --platform linux/amd64 $FIRST_TAG version
+          echo "Testing conversion (should fail gracefully without input file):"
+          docker run --rm --platform linux/amd64 $FIRST_TAG --help

@@ -2,7 +2,7 @@
 # Optimized for size and security
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,19 +14,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+# Copy source code and project files
 COPY src/ /app/src/
 COPY pyproject.toml /app/
+COPY setup.py /app/
 COPY README.md /app/
 
 WORKDIR /app
 
-# Install the package
-RUN pip install --no-cache-dir .
+# Upgrade pip and setuptools to ensure pyproject.toml support
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install the package with all dependencies from pyproject.toml
+# Using verbose mode to see what's being installed
+RUN pip install --no-cache-dir -v ".[ocr]"
 
 
 # Stage 2: Runtime
@@ -70,4 +71,3 @@ CMD ["--help"]
 LABEL maintainer="Emiel Kremers" \
       description="Convert resumes to Europass format" \
       version="0.1.0"
-
