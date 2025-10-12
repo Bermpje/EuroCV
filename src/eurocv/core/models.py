@@ -158,7 +158,20 @@ class EuropassCV(BaseModel):
 class ConversionResult(BaseModel):
     """Result of conversion."""
 
-    json: Optional[dict[str, Any]] = None
-    xml: Optional[str] = None
+    json_data: Optional[dict[str, Any]] = Field(default=None, alias="json")
+    xml_data: Optional[str] = Field(default=None, alias="xml")
     validation_errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+    # Provide properties for backward compatibility
+    @property
+    def json(self) -> Optional[dict[str, Any]]:
+        """Get JSON data."""
+        return self.json_data
+
+    @property
+    def xml(self) -> Optional[str]:
+        """Get XML data."""
+        return self.xml_data
