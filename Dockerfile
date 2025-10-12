@@ -25,11 +25,9 @@ WORKDIR /app
 # Upgrade pip and setuptools to ensure pyproject.toml support
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Explicitly install email-validator first (Pydantic dependency)
-RUN pip install --no-cache-dir email-validator
-
 # Install the package with all dependencies from pyproject.toml
-RUN pip install --no-cache-dir .[ocr]
+# Using verbose mode to see what's being installed
+RUN pip install --no-cache-dir -v ".[ocr]"
 
 
 # Stage 2: Runtime
