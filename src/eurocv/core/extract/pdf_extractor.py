@@ -215,6 +215,9 @@ class PDFExtractor:
         # Extract name (improved heuristic)
         info.first_name, info.last_name = self._extract_name(text)
         
+        # Extract location from header
+        info.city, info.country = self._extract_location_from_header(text)
+        
         return info
     
     def _extract_name(self, text: str) -> tuple[str, str]:
@@ -314,6 +317,49 @@ class PDFExtractor:
             first_name = best_words[0]
             last_name = ' '.join(best_words[1:])
             return first_name, last_name
+        
+        return None, None
+    
+    def _extract_location_from_header(self, text: str) -> tuple[str, str]:
+        """Extract location (city, country) from resume header.
+        
+        Args:
+            text: Resume text
+            
+        Returns:
+            Tuple of (city, country)
+        """
+        # Common location patterns in headers
+        # Format: "City, Region, Country" or "City, Country"
+        lines = text.split('\n')
+        
+        # Check first 50 lines for location patterns
+        for line in lines[:50]:
+            line = line.strip()
+            
+            # Skip empty lines and URLs
+            if not line or 'http' in line.lower() or '@' in line:
+                continue
+            
+            # Look for lines with comma-separated location info
+            if ',' in line:
+                # Common country names and variations
+                countries = [
+                    'Netherlands', 'Holland', 'Germany', 'Belgium', 'France', 
+                    'United Kingdom', 'UK', 'United States', 'USA', 'Spain',
+                    'Italy', 'Portugal', 'Poland', 'Sweden', 'Denmark'
+                ]
+                
+                # Check if any country is mentioned
+                for country in countries:
+                    if country.lower() in line.lower():
+                        # Split by comma and extract city
+                        parts = [p.strip() for p in line.split(',')]
+                        if len(parts) >= 2:
+                            city = parts[0]
+                            # Verify city looks reasonable (not too long, not just numbers)
+                            if len(city) > 2 and len(city) < 30 and not city.isdigit():
+                                return city, country
         
         return None, None
     
