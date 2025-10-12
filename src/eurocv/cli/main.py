@@ -77,7 +77,7 @@ def convert(
         if not isinstance(result, ConversionResult):
             console.print("[red]Error: Expected ConversionResult but got dict[/red]")
             raise typer.Exit(1)
-        
+
         # Save JSON
         json_path = out or out_json
         if json_path:
@@ -126,7 +126,9 @@ def batch(
     no_photo: bool = typer.Option(False, "--no-photo", help="Exclude photos"),
     use_ocr: bool = typer.Option(False, "--ocr", help="Use OCR for scanned PDFs"),
     parallel: int = typer.Option(1, "--parallel", "-p", help="Number of parallel workers"),
-    format: Literal["json", "xml", "both"] = typer.Option("json", "--format", "-f", help="Output format (json/xml/both)"),
+    format: Literal["json", "xml", "both"] = typer.Option(
+        "json", "--format", "-f", help="Output format (json/xml/both)"
+    ),
 ) -> None:
     """Batch convert multiple resume files.
 

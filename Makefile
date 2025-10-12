@@ -45,7 +45,7 @@ format-check:
 
 type-check:
 	@echo "🔎 Running mypy type checker..."
-	mypy src/ || true
+	mypy src/
 
 test:
 	@echo "🧪 Running pytest..."

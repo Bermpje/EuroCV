@@ -19,7 +19,8 @@ echo "✅ Format check passed!"
 echo ""
 
 echo "📋 3/4 Type check with mypy..."
-mypy src/ || echo "⚠️  Type check warnings (non-blocking)"
+mypy src/
+echo "✅ Type check passed!"
 echo ""
 
 echo "📋 4/4 Tests with pytest..."
