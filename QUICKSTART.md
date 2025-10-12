@@ -16,7 +16,7 @@ pip install eurocv
 eurocv convert resume.pdf --out output.json
 ```
 
-### 2. Convert with Dutch Locale (GDPR-friendly)
+### 2. Convert with Locale Support (GDPR-friendly)
 
 ```bash
 eurocv convert resume.pdf --locale nl-NL --no-photo --out output.json

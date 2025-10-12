@@ -2,7 +2,7 @@
 
 ## Overview
 
-**EuroCV** is a complete CLI/API tool for converting resumes (PDF/DOCX) into Europass XML/JSON format, built in Python with a focus on reusability, GDPR compliance, and Dutch market needs.
+**EuroCV** is a complete CLI/API tool for converting resumes (PDF/DOCX) into Europass XML/JSON format, built in Python with a focus on reusability, GDPR compliance, and European standardization.
 
 ## What Was Built
 
@@ -206,7 +206,7 @@ eurocv/
 ✅ **Docker Ready**: Production and development images  
 ✅ **OCR Support**: For scanned PDFs (Tesseract)  
 ✅ **GDPR/AVG Compliant**: Stateless, no-photo option  
-✅ **Dutch Support**: nl-NL locale for date/number formatting  
+✅ **Multi-locale Support**: Multiple locales including nl-NL for date/number formatting  
 ✅ **Batch Processing**: Parallel processing support  
 ✅ **Schema Validation**: Against Europass standards  
 ✅ **Comprehensive Tests**: Unit and integration tests  
