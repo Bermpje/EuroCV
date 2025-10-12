@@ -398,6 +398,12 @@ class PDFExtractor:
                 content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
                 
                 if start_date_str and end_date_str:
+                    # Validate this looks like a real work entry (not a random date in description)
+                    # Must have some text before the dates (at least a position title)
+                    if len(before_text.strip()) < 10:
+                        i += 4
+                        continue
+                    
                     exp = WorkExperience()
                     
                     # Parse dates
@@ -409,16 +415,20 @@ class PDFExtractor:
                         exp.end_date = self._parse_date(end_date_str)
                     
                     # Extract position and employer from text before dates
+                    # LinkedIn format: Company / Duration / Position / Date
                     lines_before = [l.strip() for l in before_text.split('\n') if l.strip()]
                     if lines_before:
                         # Last non-empty line before dates is usually the position
                         exp.position = lines_before[-1] if lines_before else None
                         
-                        # Line before position might be employer
-                        # But skip if it looks like a duration (e.g., "7 years 2 months")
-                        if len(lines_before) > 1:
+                        # Find the employer (company name)
+                        # It's typically the FIRST line, or a line that doesn't look like duration/position
+                        if len(lines_before) >= 3:
+                            # If we have 3+ lines, first is likely company, second is duration, third is position
+                            exp.employer = lines_before[0]
+                        elif len(lines_before) == 2:
+                            # If we have 2 lines, check if second-to-last is a duration
                             potential_employer = lines_before[-2]
-                            # Skip if it looks like a duration or page number
                             if not re.search(r'\d+\s+(year|month|day)', potential_employer, re.IGNORECASE) \
                                and not re.search(r'page\s+\d+', potential_employer, re.IGNORECASE):
                                 exp.employer = potential_employer
