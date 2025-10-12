@@ -1,7 +1,7 @@
 {
   "DocumentInfo": {
     "DocumentType": "Europass CV",
-    "CreationDate": "2025-10-12T15:40:50.893157",
+    "CreationDate": "2025-10-12T15:39:34.673300",
     "Generator": "EuroCV",
     "XSDVersion": "V3.3"
   },
@@ -257,8 +257,8 @@
           "Name": "Avans Hogeschool Breda"
         },
         "Level": {
-          "Code": "6",
-          "Label": "Bachelor or equivalent"
+          "Code": "7",
+          "Label": "Master or equivalent"
         }
       },
       {

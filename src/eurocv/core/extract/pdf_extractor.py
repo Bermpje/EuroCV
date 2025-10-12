@@ -380,7 +380,8 @@ class PDFExtractor:
         
         # Split text into potential entries by looking for date ranges
         # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
-        date_range_pattern = r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*[-–—]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|Present)'
+        # More strict: require either full month name or standard abbreviation
+        date_range_pattern = r'((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)'
         
         entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
         
@@ -414,8 +415,13 @@ class PDFExtractor:
                         exp.position = lines_before[-1] if lines_before else None
                         
                         # Line before position might be employer
+                        # But skip if it looks like a duration (e.g., "7 years 2 months")
                         if len(lines_before) > 1:
-                            exp.employer = lines_before[-2]
+                            potential_employer = lines_before[-2]
+                            # Skip if it looks like a duration or page number
+                            if not re.search(r'\d+\s+(year|month|day)', potential_employer, re.IGNORECASE) \
+                               and not re.search(r'page\s+\d+', potential_employer, re.IGNORECASE):
+                                exp.employer = potential_employer
                     
                     # Extract location and description from content after dates
                     content_lines = [l.strip() for l in content_after.split('\n')[:20] if l.strip()]

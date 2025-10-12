@@ -1,5 +1,6 @@
 """Map Resume to Europass format."""
 
+import re
 from datetime import datetime
 from typing import Dict, Any, Optional
 import base64
@@ -473,20 +474,44 @@ class EuropassMapper:
         
         title_lower = title.lower()
         
-        # Doctoral
-        if any(word in title_lower for word in ['phd', 'doctorate', 'doctoral']):
+        # Doctoral (ISCED 8)
+        if any(word in title_lower for word in ['phd', 'ph.d', 'doctorate', 'doctoral', 'doctor']):
             return {"Code": "8", "Label": "Doctoral or equivalent"}
         
-        # Master
-        if any(word in title_lower for word in ['master', 'msc', 'ma', 'mba']):
+        # Master (ISCED 7) - check BEFORE bachelor to avoid false matches
+        # Use word boundaries to avoid matching 'ma' in 'informatica'
+        master_patterns = [r'\bmaster\b', r"\bmaster's\b", r'\bmsc\b', r'\bm\.?sc\b', 
+                          r'\bma\b', r'\bm\.?a\b', r'\bmba\b']
+        if any(re.search(pattern, title_lower) for pattern in master_patterns):
             return {"Code": "7", "Label": "Master or equivalent"}
         
-        # Bachelor
-        if any(word in title_lower for word in ['bachelor', 'bsc', 'ba', 'bs']):
-            return {"Code": "6", "Label": "Bachelor or equivalent"}
+        # Premaster is still master level
+        if 'premaster' in title_lower:
+            return {"Code": "7", "Label": "Master or equivalent"}
         
-        # Secondary
-        if any(word in title_lower for word in ['high school', 'secondary', 'diploma', 'havo', 'vwo', 'mbo']):
+        # Bachelor (ISCED 6) - now more specific
+        # Use word boundaries to avoid matching 'ba' in random words
+        bachelor_patterns = [r'\bbachelor\b', r"\bbachelor's\b", r'\bbsc\b', r'\bb\.?sc\b',
+                           r'\bba\b', r'\bb\.?a\b', r'\bbs\b', r'\bb\.?s\b', 
+                           r'\bbict\b', r'\bb\.?ict\b']
+        if any(re.search(pattern, title_lower) for pattern in bachelor_patterns):
+            # Make sure it's not "bachelor of" in a master's context
+            if not re.search(r'\bmaster\b', title_lower):
+                return {"Code": "6", "Label": "Bachelor or equivalent"}
+        
+        # Short-cycle tertiary (ISCED 5) - HBO, Associate
+        if any(word in title_lower for word in ['hbo', 'associate', 'hogeschool']):
+            # But if it says Bachelor, it's level 6
+            if 'bachelor' in title_lower:
+                return {"Code": "6", "Label": "Bachelor or equivalent"}
+            return {"Code": "5", "Label": "Short-cycle tertiary education"}
+        
+        # Upper secondary (ISCED 3)
+        if any(word in title_lower for word in ['high school', 'secondary', 'diploma', 'havo', 'vwo', 'gymnasium']):
+            return {"Code": "3", "Label": "Upper secondary education"}
+        
+        # Vocational secondary (ISCED 3/4)
+        if any(word in title_lower for word in ['mbo', 'vocational', 'technical college']):
             return {"Code": "3", "Label": "Upper secondary education"}
         
         return None
