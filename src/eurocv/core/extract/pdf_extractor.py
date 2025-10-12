@@ -381,6 +381,7 @@ class PDFExtractor:
             "education": r"(?i)(education|academic|qualifications)",
             "skill": r"(?i)(skills|competencies|expertise)",
             "language": r"(?i)(languages|language\s+skills)",
+            "certification": r"(?i)(certifications?|licenses?|credentials?)",
         }
         
         # Find section positions (use FIRST match of each section only)
@@ -754,4 +755,41 @@ class PDFExtractor:
             skills.append(skill)
         
         return skills
+    
+    def _extract_certifications(self, text: str) -> List[Certification]:
+        """Extract certifications.
+        
+        Args:
+            text: Certifications section text
+            
+        Returns:
+            List of Certification objects
+        """
+        certifications = []
+        lines = text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines, page numbers, section headers
+            if not line or len(line) < 5:
+                continue
+            if re.search(r'page\s+\d+|certifications?|licenses?', line, re.IGNORECASE):
+                continue
+            
+            # Check if line looks like a certification
+            # Usually certification lines have capital letters or known cert names
+            if any(word in line for word in ['Certified', 'Foundation', 'Professional', 'AWS', 'Azure', 'Microsoft']):
+                cert = Certification(name=line)
+                
+                # Try to extract date from the line
+                year_match = re.search(r'\b(20\d{2})\b', line)
+                if year_match:
+                    year = int(year_match.group(1))
+                    from datetime import date as date_class
+                    cert.date = date_class(year, 1, 1)
+                
+                certifications.append(cert)
+        
+        return certifications
 

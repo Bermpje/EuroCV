@@ -64,6 +64,13 @@ class Skill(BaseModel):
     category: Optional[str] = None  # e.g., "technical", "soft", etc.
 
 
+class Certification(BaseModel):
+    """Certification model."""
+    name: str
+    issuer: Optional[str] = None
+    date: Optional[date] = None
+
+
 class Resume(BaseModel):
     """Intermediate resume model."""
     personal_info: PersonalInfo = Field(default_factory=PersonalInfo)
@@ -71,6 +78,7 @@ class Resume(BaseModel):
     education: List[Education] = Field(default_factory=list)
     languages: List[Language] = Field(default_factory=list)
     skills: List[Skill] = Field(default_factory=list)
+    certifications: List[Certification] = Field(default_factory=list)
     summary: Optional[str] = None
     raw_text: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
