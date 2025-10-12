@@ -22,6 +22,11 @@ class SchemaValidator:
         """
         errors = []
 
+        # Validate data type
+        if not isinstance(data, dict):
+            errors.append("Invalid data type: expected dictionary")
+            return False, errors
+
         # Basic structure validation
         if "DocumentInfo" not in data:
             errors.append("Missing required field: DocumentInfo")
