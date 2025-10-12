@@ -17,7 +17,7 @@ def convert_to_europass(
     output_format: Literal["json", "xml", "both"] = "json",
     use_ocr: bool = False,
     validate: bool = True,
-) -> Union[dict[str, Any], ConversionResult]:
+) -> Union[dict[str, Any], str, ConversionResult]:
     """Convert a resume file to Europass format.
 
     This is the main entry point for the library.
@@ -97,6 +97,7 @@ def extract_resume(file_path: str, use_ocr: bool = False) -> Resume:
     path = Path(file_path)
     suffix = path.suffix.lower()
 
+    extractor: Union[PDFExtractor, DOCXExtractor]
     if suffix == ".pdf":
         extractor = PDFExtractor(use_ocr=use_ocr)
         return extractor.extract(str(path))
