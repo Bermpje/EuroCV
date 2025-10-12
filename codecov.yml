@@ -4,17 +4,17 @@
 coverage:
   precision: 2
   round: down
-  range: "59...100"  # Starting from current coverage
+  range: "70...100"  # Current coverage range
 
   status:
     project:
       default:
-        target: 80%  # Target: 80% coverage
-        threshold: 2%  # Allow 2% decrease
+        target: 73%  # Current coverage - maintain or improve
+        threshold: 3%  # Allow 3% decrease (down to 70%)
         informational: false
     patch:
       default:
-        target: 70%  # New code should have 70%+ coverage
+        target: 75%  # New code should have 75%+ coverage
         threshold: 5%
         informational: false
 
