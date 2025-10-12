@@ -24,8 +24,9 @@ app = FastAPI(
 
 class ConvertRequest(BaseModel):
     """Convert request parameters."""
+
     model_config = ConfigDict(populate_by_name=True)
-    
+
     locale: str = "en-US"
     include_photo: bool = True
     output_format: Literal["json", "xml", "both"] = "json"
