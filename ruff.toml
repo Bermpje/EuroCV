@@ -1,0 +1,6 @@
+[lint]
+select = ["E", "F", "W", "I", "UP"]
+
+# Allow longer lines for regex patterns in pdf_extractor
+[lint.per-file-ignores]
+"src/eurocv/core/extract/pdf_extractor.py" = ["E501"]

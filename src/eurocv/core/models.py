@@ -1,8 +1,9 @@
 """Data models for resume and Europass CV."""
 
-from datetime import date, datetime
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, EmailStr
+from datetime import date
+from typing import Any, Optional
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 # Intermediate Resume Model (parsed from PDF/DOCX)
@@ -31,7 +32,7 @@ class WorkExperience(BaseModel):
     end_date: Optional[date] = None
     current: bool = False
     description: Optional[str] = None
-    activities: List[str] = Field(default_factory=list)
+    activities: list[str] = Field(default_factory=list)
 
 
 class Education(BaseModel):
@@ -74,65 +75,65 @@ class Certification(BaseModel):
 class Resume(BaseModel):
     """Intermediate resume model."""
     personal_info: PersonalInfo = Field(default_factory=PersonalInfo)
-    work_experience: List[WorkExperience] = Field(default_factory=list)
-    education: List[Education] = Field(default_factory=list)
-    languages: List[Language] = Field(default_factory=list)
-    skills: List[Skill] = Field(default_factory=list)
-    certifications: List[Certification] = Field(default_factory=list)
+    work_experience: list[WorkExperience] = Field(default_factory=list)
+    education: list[Education] = Field(default_factory=list)
+    languages: list[Language] = Field(default_factory=list)
+    skills: list[Skill] = Field(default_factory=list)
+    certifications: list[Certification] = Field(default_factory=list)
     summary: Optional[str] = None
     raw_text: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # Europass Models (following Europass schema)
 class EuropassIdentification(BaseModel):
     """Europass identification section."""
-    PersonName: Dict[str, str] = Field(default_factory=dict)
-    ContactInfo: Dict[str, Any] = Field(default_factory=dict)
-    Demographics: Dict[str, Any] = Field(default_factory=dict)
-    Photo: Optional[Dict[str, str]] = None
+    PersonName: dict[str, str] = Field(default_factory=dict)
+    ContactInfo: dict[str, Any] = Field(default_factory=dict)
+    Demographics: dict[str, Any] = Field(default_factory=dict)
+    Photo: Optional[dict[str, str]] = None
 
 
 class EuropassWorkExperience(BaseModel):
     """Europass work experience."""
-    Period: Dict[str, Any]
-    Position: Dict[str, str]
+    Period: dict[str, Any]
+    Position: dict[str, str]
     Activities: Optional[str] = None
-    Employer: Dict[str, Any]
+    Employer: dict[str, Any]
 
 
 class EuropassEducation(BaseModel):
     """Europass education entry."""
-    Period: Dict[str, Any]
+    Period: dict[str, Any]
     Title: str
-    Organisation: Dict[str, Any]
+    Organisation: dict[str, Any]
     Level: Optional[str] = None
 
 
 class EuropassLanguage(BaseModel):
     """Europass language skill."""
-    Description: Dict[str, str]
-    ProficiencyLevel: Dict[str, str]
+    Description: dict[str, str]
+    ProficiencyLevel: dict[str, str]
 
 
 class EuropassSkills(BaseModel):
     """Europass skills section."""
-    Communication: Optional[Dict[str, str]] = None
-    Organisational: Optional[Dict[str, str]] = None
-    JobRelated: Optional[Dict[str, str]] = None
-    Computer: Optional[Dict[str, str]] = None
-    Other: Optional[Dict[str, str]] = None
+    Communication: Optional[dict[str, str]] = None
+    Organisational: Optional[dict[str, str]] = None
+    JobRelated: Optional[dict[str, str]] = None
+    Computer: Optional[dict[str, str]] = None
+    Other: Optional[dict[str, str]] = None
 
 
 class EuropassCV(BaseModel):
     """Europass CV model (simplified)."""
-    DocumentInfo: Dict[str, Any] = Field(default_factory=dict)
-    LearnerInfo: Dict[str, Any] = Field(default_factory=dict)
-    
-    def to_json(self) -> Dict[str, Any]:
+    DocumentInfo: dict[str, Any] = Field(default_factory=dict)
+    LearnerInfo: dict[str, Any] = Field(default_factory=dict)
+
+    def to_json(self) -> dict[str, Any]:
         """Convert to JSON dict."""
         return self.model_dump(exclude_none=True)
-    
+
     def to_xml(self) -> str:
         """Convert to XML string."""
         # This will be implemented in the validate module
@@ -142,8 +143,8 @@ class EuropassCV(BaseModel):
 
 class ConversionResult(BaseModel):
     """Result of conversion."""
-    json: Optional[Dict[str, Any]] = None
+    json: Optional[dict[str, Any]] = None
     xml: Optional[str] = None
-    validation_errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    validation_errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
