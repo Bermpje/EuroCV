@@ -705,7 +705,7 @@ class PDFExtractor:
         return languages
     
     def _extract_skills(self, text: str) -> List[Skill]:
-        """Extract skills.
+        """Extract skills with improved categorization.
         
         Args:
             text: Skills section text
@@ -714,15 +714,44 @@ class PDFExtractor:
             List of Skill objects
         """
         skills = []
+        seen_skills = set()  # Track duplicates
         
         # Split by common delimiters
-        skill_items = re.split(r'[,•\n]', text)
+        skill_items = re.split(r'[,•\n·]', text)
+        
+        # Noise words to skip (common resume fluff)
+        noise_words = {
+            'skills', 'experience', 'proficient', 'knowledge', 'familiar',
+            'and', 'or', 'including', 'such as', 'etc', 'years', 'page'
+        }
         
         for item in skill_items:
             item = item.strip()
-            if item and len(item) > 2 and len(item) < 100:
-                skill = Skill(name=item)
-                skills.append(skill)
+            
+            # Basic validation
+            if not item or len(item) < 2 or len(item) > 50:
+                continue
+            
+            # Skip if it's just numbers or dates
+            if re.match(r'^[\d\s\-/]+$', item):
+                continue
+            
+            # Skip noise words
+            if item.lower() in noise_words:
+                continue
+            
+            # Skip if contains too many numbers (likely not a skill name)
+            if sum(c.isdigit() for c in item) > len(item) // 2:
+                continue
+            
+            # Normalize for duplicate detection (lowercase, remove spaces)
+            normalized = item.lower().replace(' ', '')
+            if normalized in seen_skills:
+                continue
+            
+            seen_skills.add(normalized)
+            skill = Skill(name=item)
+            skills.append(skill)
         
         return skills
 
