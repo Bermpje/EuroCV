@@ -11,7 +11,7 @@ Convert resumes (PDF/DOCX) to Europass XML/JSON format with CLI, Python API, and
 - 🌐 **HTTP service**: FastAPI-based REST API
 - 🐳 **Docker ready**: Containerized for easy deployment
 - 🔒 **AVG/GDPR compliant**: Stateless processing, no data retention
-- 🇳🇱 **NL-first**: Dutch date/number formatting support
+- 🌍 **Multi-locale**: Support for multiple date/number formats (including Dutch)
 
 ## Installation
 
@@ -186,7 +186,7 @@ docker run --rm -v $PWD:/data eurocv:local convert /data/test.pdf
 ## Privacy & Compliance (AVG/GDPR)
 
 - **Stateless processing**: No data is stored on disk
-- **No photo by default**: Use `--no-photo` flag to exclude photos (recommended in NL)
+- **No photo by default**: Use `--no-photo` flag to exclude photos (GDPR-friendly)
 - **Local processing**: Run in your own infrastructure
 - **Encrypted storage**: Use `--store=encrypted` only when necessary
 

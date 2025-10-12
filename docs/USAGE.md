@@ -62,7 +62,8 @@ eurocv convert resume.docx --out-json cv.json --out-xml cv.xml
 ### With Options
 
 ```bash
-# Dutch locale, no photo (GDPR-friendly)
+# With locale support, no photo (GDPR-friendly)
+# Supports multiple locales: en-US, nl-NL, de-DE, fr-FR, etc.
 eurocv convert resume.pdf --locale nl-NL --no-photo --out output.json
 
 # Use OCR for scanned PDFs
@@ -81,7 +82,7 @@ eurocv batch "resumes/*.pdf" --out-dir output/
 # Parallel processing
 eurocv batch "*.pdf" --out-dir output/ --parallel 4
 
-# Dutch locale for all files
+# Batch conversion with locale support
 eurocv batch "*.docx" --out-dir output/ --locale nl-NL --no-photo
 ```
 
