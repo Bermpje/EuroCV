@@ -68,4 +68,6 @@ jobs:
           # Extract the first tag from the metadata output (the branch-specific tag)
           FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
           echo "Testing image: $FIRST_TAG"
-          docker run --rm --platform linux/amd64 $FIRST_TAG --version
+          docker run --rm --platform linux/amd64 $FIRST_TAG version
+          echo "Testing conversion (should fail gracefully without input file):"
+          docker run --rm --platform linux/amd64 $FIRST_TAG --help
