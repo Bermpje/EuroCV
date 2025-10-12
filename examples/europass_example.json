@@ -1,0 +1,207 @@
+{
+  "DocumentInfo": {
+    "DocumentType": "Europass CV",
+    "CreationDate": "2024-10-12T12:00:00",
+    "Generator": "EuroCV",
+    "XSDVersion": "V3.4"
+  },
+  "LearnerInfo": {
+    "Identification": {
+      "PersonName": {
+        "FirstName": "Jan",
+        "Surname": "de Vries"
+      },
+      "ContactInfo": {
+        "Address": {
+          "Contact": {
+            "AddressLine": "Hoofdstraat 123",
+            "PostalCode": "1012AB",
+            "Municipality": "Amsterdam",
+            "Country": {
+              "Code": "NL",
+              "Label": "Netherlands"
+            }
+          }
+        },
+        "Email": {
+          "Contact": "jan.devries@example.nl"
+        },
+        "Telephone": [
+          {
+            "Contact": "+31 6 12345678"
+          }
+        ]
+      },
+      "Demographics": {
+        "Birthdate": {
+          "Year": 1990,
+          "Month": "--06",
+          "Day": "---15"
+        },
+        "Nationality": [
+          {
+            "Code": "NL",
+            "Label": "Netherlands"
+          }
+        ]
+      }
+    },
+    "Headline": {
+      "Type": {
+        "Code": "preferred",
+        "Label": "Headline"
+      },
+      "Description": {
+        "Label": "Senior Software Engineer"
+      }
+    },
+    "WorkExperience": [
+      {
+        "Period": {
+          "From": {
+            "Year": 2020,
+            "Month": "--01",
+            "Day": "---15"
+          },
+          "To": {
+            "Year": 2024,
+            "Month": "--10",
+            "Day": "---12"
+          }
+        },
+        "Position": {
+          "Code": "2512",
+          "Label": "Software Developer"
+        },
+        "Activities": "Led development of microservices architecture using Python and FastAPI.\nMentored team of 5 junior developers.\nImplemented CI/CD pipelines with Docker and Kubernetes.\nReduced deployment time by 60%.",
+        "Employer": {
+          "Name": "Tech Innovation B.V.",
+          "ContactInfo": {
+            "Address": {
+              "Contact": {
+                "Municipality": "Amsterdam",
+                "Country": {
+                  "Code": "NL",
+                  "Label": "Netherlands"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "Period": {
+          "From": {
+            "Year": 2018,
+            "Month": "--06",
+            "Day": "---01"
+          },
+          "To": {
+            "Year": 2019,
+            "Month": "--12",
+            "Day": "---31"
+          }
+        },
+        "Position": {
+          "Code": "2512",
+          "Label": "Junior Software Developer"
+        },
+        "Activities": "Developed web applications using Django and React.\nParticipated in Agile/Scrum development process.",
+        "Employer": {
+          "Name": "Digital Solutions NL",
+          "ContactInfo": {
+            "Address": {
+              "Contact": {
+                "Municipality": "Utrecht",
+                "Country": {
+                  "Code": "NL",
+                  "Label": "Netherlands"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "Education": [
+      {
+        "Period": {
+          "From": {
+            "Year": 2014,
+            "Month": "--09",
+            "Day": "---01"
+          },
+          "To": {
+            "Year": 2018,
+            "Month": "--06",
+            "Day": "---30"
+          }
+        },
+        "Title": "Bachelor of Science in Computer Science",
+        "Skills": "Object-oriented programming, algorithms and data structures, web development, database systems, software engineering principles.",
+        "Organisation": {
+          "Name": "Universiteit van Amsterdam",
+          "ContactInfo": {
+            "Address": {
+              "Contact": {
+                "Municipality": "Amsterdam",
+                "Country": {
+                  "Code": "NL",
+                  "Label": "Netherlands"
+                }
+              }
+            }
+          }
+        },
+        "Level": {
+          "Code": "6",
+          "Label": "Bachelor or equivalent"
+        }
+      }
+    ],
+    "Skills": {
+      "Linguistic": {
+        "MotherTongue": [
+          {
+            "Description": {
+              "Label": "Dutch"
+            }
+          }
+        ],
+        "ForeignLanguage": [
+          {
+            "Description": {
+              "Label": "English"
+            },
+            "ProficiencyLevel": {
+              "Listening": "C2",
+              "Reading": "C2",
+              "SpokenInteraction": "C1",
+              "SpokenProduction": "C1",
+              "Writing": "C1"
+            }
+          },
+          {
+            "Description": {
+              "Label": "German"
+            },
+            "ProficiencyLevel": {
+              "Listening": "B1",
+              "Reading": "B1",
+              "SpokenInteraction": "B1",
+              "SpokenProduction": "B1",
+              "Writing": "A2"
+            }
+          }
+        ]
+      },
+      "Computer": {
+        "Description": "Python, JavaScript, TypeScript, Java, SQL, HTML, CSS, Git, Docker, Kubernetes, AWS, Azure, Linux, Windows"
+      },
+      "Other": {
+        "Description": "Project management, Agile/Scrum, Team leadership"
+      }
+    }
+  }
+}
+

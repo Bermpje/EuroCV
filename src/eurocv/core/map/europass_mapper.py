@@ -130,10 +130,11 @@ class EuropassMapper:
         # Demographics
         demographics = {}
         if pi.date_of_birth:
+            # Europass format for dates
             demographics["Birthdate"] = {
                 "Year": pi.date_of_birth.year,
-                "Month": f"{pi.date_of_birth.month:02d}",
-                "Day": f"{pi.date_of_birth.day:02d}"
+                "Month": f"--{pi.date_of_birth.month:02d}",
+                "Day": f"---{pi.date_of_birth.day:02d}"
             }
         
         if pi.nationality:
@@ -166,20 +167,20 @@ class EuropassMapper:
         """
         work_exp: Dict[str, Any] = {}
         
-        # Period
+        # Period (using proper Europass date format)
         period: Dict[str, Any] = {}
         if exp.start_date:
             period["From"] = {
                 "Year": exp.start_date.year,
-                "Month": f"{exp.start_date.month:02d}",
-                "Day": f"{exp.start_date.day:02d}"
+                "Month": f"--{exp.start_date.month:02d}",  # Europass format: --MM
+                "Day": f"---{exp.start_date.day:02d}"      # Europass format: ---DD
             }
         
         if exp.end_date:
             period["To"] = {
                 "Year": exp.end_date.year,
-                "Month": f"{exp.end_date.month:02d}",
-                "Day": f"{exp.end_date.day:02d}"
+                "Month": f"--{exp.end_date.month:02d}",
+                "Day": f"---{exp.end_date.day:02d}"
             }
         elif exp.current:
             period["Current"] = True
@@ -187,9 +188,13 @@ class EuropassMapper:
         if period:
             work_exp["Period"] = period
         
-        # Position
+        # Position (with ISCO code if available)
         if exp.position:
-            work_exp["Position"] = {"Label": exp.position}
+            position = {"Label": exp.position}
+            # Add ISCO-08 code if it can be inferred (default to software developer)
+            if any(keyword in exp.position.lower() for keyword in ['developer', 'programmer', 'software', 'engineer']):
+                position["Code"] = "2512"  # Software developers
+            work_exp["Position"] = position
         
         # Activities and responsibilities
         if exp.description:
@@ -207,8 +212,10 @@ class EuropassMapper:
             if exp.city:
                 employer["ContactInfo"]["Address"]["Contact"]["Municipality"] = exp.city
             if exp.country:
+                # Use ISO country code if possible
+                country_code = self._get_country_code(exp.country)
                 employer["ContactInfo"]["Address"]["Contact"]["Country"] = {
-                    "Code": exp.country,
+                    "Code": country_code,
                     "Label": exp.country
                 }
         
@@ -228,20 +235,20 @@ class EuropassMapper:
         """
         education: Dict[str, Any] = {}
         
-        # Period
+        # Period (using proper Europass date format)
         period: Dict[str, Any] = {}
         if edu.start_date:
             period["From"] = {
                 "Year": edu.start_date.year,
-                "Month": f"{edu.start_date.month:02d}",
-                "Day": f"{edu.start_date.day:02d}"
+                "Month": f"--{edu.start_date.month:02d}",
+                "Day": f"---{edu.start_date.day:02d}"
             }
         
         if edu.end_date:
             period["To"] = {
                 "Year": edu.end_date.year,
-                "Month": f"{edu.end_date.month:02d}",
-                "Day": f"{edu.end_date.day:02d}"
+                "Month": f"--{edu.end_date.month:02d}",
+                "Day": f"---{edu.end_date.day:02d}"
             }
         elif edu.current:
             period["Current"] = True
@@ -257,6 +264,10 @@ class EuropassMapper:
             first_line = edu.description.split('\n')[0][:100]
             education["Title"] = first_line
         
+        # Skills acquired (description)
+        if edu.description:
+            education["Skills"] = edu.description
+        
         # Organization
         organization = {}
         if edu.organization:
@@ -267,17 +278,23 @@ class EuropassMapper:
             if edu.city:
                 organization["ContactInfo"]["Address"]["Contact"]["Municipality"] = edu.city
             if edu.country:
+                country_code = self._get_country_code(edu.country)
                 organization["ContactInfo"]["Address"]["Contact"]["Country"] = {
-                    "Code": edu.country,
+                    "Code": country_code,
                     "Label": edu.country
                 }
         
         if organization:
             education["Organisation"] = organization
         
-        # Level (ISCED)
+        # Level (ISCED 2011)
         if edu.level:
-            education["Level"] = edu.level
+            education["Level"] = {"Code": edu.level, "Label": self._get_isced_label(edu.level)}
+        else:
+            # Try to infer level from title
+            level = self._infer_education_level(edu.title or "")
+            if level:
+                education["Level"] = level
         
         return education
     
@@ -344,4 +361,98 @@ class EuropassMapper:
                 skills["Other"] = {"Description": ", ".join(other_skills)}
         
         return skills if skills else None
+    
+    def _get_country_code(self, country_name: str) -> str:
+        """Get ISO 3166-1 alpha-2 country code.
+        
+        Args:
+            country_name: Country name
+            
+        Returns:
+            ISO country code
+        """
+        # Common country mappings
+        country_map = {
+            "netherlands": "NL",
+            "germany": "DE",
+            "belgium": "BE",
+            "france": "FR",
+            "united kingdom": "GB",
+            "uk": "GB",
+            "united states": "US",
+            "usa": "US",
+            "spain": "ES",
+            "italy": "IT",
+            "portugal": "PT",
+            "poland": "PL",
+            "sweden": "SE",
+            "denmark": "DK",
+            "norway": "NO",
+            "finland": "FI",
+            "austria": "AT",
+            "switzerland": "CH",
+            "ireland": "IE",
+            "greece": "GR",
+            "czech republic": "CZ",
+            "hungary": "HU",
+            "romania": "RO",
+            "bulgaria": "BG",
+        }
+        
+        country_lower = country_name.lower().strip()
+        return country_map.get(country_lower, country_name[:2].upper())
+    
+    def _get_isced_label(self, code: str) -> str:
+        """Get ISCED 2011 level label.
+        
+        Args:
+            code: ISCED level code
+            
+        Returns:
+            Level label
+        """
+        isced_labels = {
+            "0": "Early childhood education",
+            "1": "Primary education",
+            "2": "Lower secondary education",
+            "3": "Upper secondary education",
+            "4": "Post-secondary non-tertiary education",
+            "5": "Short-cycle tertiary education",
+            "6": "Bachelor or equivalent",
+            "7": "Master or equivalent",
+            "8": "Doctoral or equivalent"
+        }
+        return isced_labels.get(code, f"Level {code}")
+    
+    def _infer_education_level(self, title: str) -> Optional[Dict[str, str]]:
+        """Infer ISCED level from education title.
+        
+        Args:
+            title: Education title
+            
+        Returns:
+            Dict with Code and Label, or None
+        """
+        if not title:
+            return None
+        
+        title_lower = title.lower()
+        
+        # Doctoral
+        if any(word in title_lower for word in ['phd', 'doctorate', 'doctoral']):
+            return {"Code": "8", "Label": "Doctoral or equivalent"}
+        
+        # Master
+        if any(word in title_lower for word in ['master', 'msc', 'ma', 'mba']):
+            return {"Code": "7", "Label": "Master or equivalent"}
+        
+        # Bachelor
+        if any(word in title_lower for word in ['bachelor', 'bsc', 'ba', 'bs']):
+            return {"Code": "6", "Label": "Bachelor or equivalent"}
+        
+        # Secondary
+        if any(word in title_lower for word in ['high school', 'secondary', 'diploma', 'havo', 'vwo', 'mbo']):
+            return {"Code": "3", "Label": "Upper secondary education"}
+        
+        return None
 
