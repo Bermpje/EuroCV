@@ -2,14 +2,15 @@
 
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from eurocv import __version__
 from eurocv.core.converter import convert_to_europass, validate_europass
+from eurocv.core.models import ConversionResult
 
 # Create FastAPI app
 app = FastAPI(
@@ -23,12 +24,14 @@ app = FastAPI(
 
 class ConvertRequest(BaseModel):
     """Convert request parameters."""
-
+    
     locale: str = "en-US"
     include_photo: bool = True
-    output_format: str = "json"  # json, xml, or both
+    output_format: Literal["json", "xml", "both"] = "json"
     use_ocr: bool = False
     validate: bool = True
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ConvertResponse(BaseModel):
@@ -139,17 +142,23 @@ async def convert(
 
         # Build response
         if output_format == "json":
-            return ConvertResponse(success=True, data=result, message="Conversion successful")
+            if isinstance(result, dict):
+                return ConvertResponse(success=True, data=result, message="Conversion successful")
+            raise HTTPException(status_code=500, detail="Expected dict for JSON output")
         elif output_format == "xml":
-            return ConvertResponse(success=True, xml=result, message="Conversion successful")
+            if isinstance(result, str):
+                return ConvertResponse(success=True, xml=result, message="Conversion successful")
+            raise HTTPException(status_code=500, detail="Expected str for XML output")
         else:  # both
-            return ConvertResponse(
-                success=True,
-                data=result.json_data,
-                xml=result.xml_data,
-                validation_errors=result.validation_errors,
-                message="Conversion successful",
-            )
+            if isinstance(result, ConversionResult):
+                return ConvertResponse(
+                    success=True,
+                    data=result.json_data,
+                    xml=result.xml_data,
+                    validation_errors=result.validation_errors,
+                    message="Conversion successful",
+                )
+            raise HTTPException(status_code=500, detail="Expected ConversionResult for both output")
 
     except Exception as e:
         # Clean up temp file on error
@@ -206,7 +215,7 @@ async def info() -> dict[str, Any]:
 
 # Error handlers
 @app.exception_handler(404)
-async def not_found_handler(request, exc):
+async def not_found_handler(request: Any, exc: Any) -> JSONResponse:
     """Handle 404 errors."""
     return JSONResponse(
         status_code=404,
@@ -215,7 +224,7 @@ async def not_found_handler(request, exc):
 
 
 @app.exception_handler(500)
-async def internal_error_handler(request, exc):
+async def internal_error_handler(request: Any, exc: Any) -> JSONResponse:
     """Handle 500 errors."""
     return JSONResponse(
         status_code=500, content={"detail": "Internal server error. Please try again."}

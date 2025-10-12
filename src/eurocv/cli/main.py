@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import typer
 from rich import print as rprint
@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from eurocv.core.converter import convert_to_europass
+from eurocv.core.models import ConversionResult
 from eurocv.core.validate.schema_validator import SchemaValidator
 
 app = typer.Typer(
@@ -40,7 +41,7 @@ def convert(
         eurocv convert cv.pdf --locale nl-NL --no-photo
     """
     # Determine output format
-    output_format = "json"
+    output_format: Literal["json", "xml", "both"] = "json"
     if out_xml and not (out or out_json):
         output_format = "xml"
     elif (out or out_json) and out_xml:
@@ -72,16 +73,23 @@ def convert(
 
     # Handle output
     if output_format == "both":
+        # Type guard: result must be ConversionResult when output_format is "both"
+        if not isinstance(result, ConversionResult):
+            console.print("[red]Error: Expected ConversionResult but got dict[/red]")
+            raise typer.Exit(1)
+        
         # Save JSON
         json_path = out or out_json
         if json_path:
-            _save_json(result.json_data, json_path, pretty)
-            console.print(f"[green]✓[/green] JSON saved to: {json_path}")
+            if result.json_data:
+                _save_json(result.json_data, json_path, pretty)
+                console.print(f"[green]✓[/green] JSON saved to: {json_path}")
         else:
-            _print_json(result.json_data, pretty)
+            if result.json_data:
+                _print_json(result.json_data, pretty)
 
         # Save XML
-        if out_xml:
+        if out_xml and result.xml_data:
             _save_xml(result.xml_data, out_xml)
             console.print(f"[green]✓[/green] XML saved to: {out_xml}")
 
@@ -94,14 +102,17 @@ def convert(
     elif output_format == "json":
         if out or out_json:
             json_path = out or out_json
-            _save_json(result, json_path, pretty)
+            if json_path and isinstance(result, dict):
+                _save_json(result, json_path, pretty)
             console.print(f"[green]✓[/green] Saved to: {json_path}")
         else:
-            _print_json(result, pretty)
+            if isinstance(result, dict):
+                _print_json(result, pretty)
 
     elif output_format == "xml":
         if out_xml:
-            _save_xml(result, out_xml)
+            if isinstance(result, str):
+                _save_xml(result, out_xml)
             console.print(f"[green]✓[/green] Saved to: {out_xml}")
         else:
             console.print(result)
@@ -115,7 +126,7 @@ def batch(
     no_photo: bool = typer.Option(False, "--no-photo", help="Exclude photos"),
     use_ocr: bool = typer.Option(False, "--ocr", help="Use OCR for scanned PDFs"),
     parallel: int = typer.Option(1, "--parallel", "-p", help="Number of parallel workers"),
-    format: str = typer.Option("json", "--format", "-f", help="Output format (json/xml/both)"),
+    format: Literal["json", "xml", "both"] = typer.Option("json", "--format", "-f", help="Output format (json/xml/both)"),
 ) -> None:
     """Batch convert multiple resume files.
 
@@ -144,8 +155,8 @@ def batch(
         success_count = 0
         error_count = 0
 
-        for file_path in files:
-            file_path = Path(file_path)
+        for file_str in files:
+            file_path = Path(file_str)
             progress.update(task, description=f"[cyan]Converting: {file_path.name}")
 
             try:
@@ -164,13 +175,19 @@ def batch(
 
                 if format in ["json", "both"]:
                     json_path = out_dir / f"{base_name}.europass.json"
-                    data = result.json_data if format == "both" else result
-                    _save_json(data, json_path, pretty=True)
+                    if format == "both" and isinstance(result, ConversionResult):
+                        if result.json_data:
+                            _save_json(result.json_data, json_path, pretty=True)
+                    elif isinstance(result, dict):
+                        _save_json(result, json_path, pretty=True)
 
                 if format in ["xml", "both"]:
                     xml_path = out_dir / f"{base_name}.europass.xml"
-                    data = result.xml_data if format == "both" else result
-                    _save_xml(data, xml_path)
+                    if format == "both" and isinstance(result, ConversionResult):
+                        if result.xml_data:
+                            _save_xml(result.xml_data, xml_path)
+                    elif isinstance(result, str):
+                        _save_xml(result, xml_path)
 
                 success_count += 1
 
