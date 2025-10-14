@@ -30,8 +30,10 @@
 
 1. **Use `uv` for Python package management**: Always use `uv` commands for installing packages and managing dependencies.
 
-2. **Run linters before committing**: Ensure ruff, black, and mypy all pass before committing.
+2. **Use ruff for linting and formatting**: We use `ruff check` for linting and `ruff format` for formatting. Black has been removed to avoid conflicts.
 
-3. **Test before pushing**: Run the test suite locally to catch issues early.
+3. **Run all checks before committing**: Ensure ruff (lint + format), mypy, and tests all pass before committing. Pre-commit hooks will enforce this.
 
-4. **Type hints**: Use proper type hints throughout the codebase. Fix mypy errors, don't ignore them.
+4. **Test before pushing**: Run the test suite locally to catch issues early.
+
+5. **Type hints**: Use proper type hints throughout the codebase. Fix mypy errors, don't ignore them.
