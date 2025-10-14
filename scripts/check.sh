@@ -13,8 +13,8 @@ ruff check src/
 echo "✅ Lint passed!"
 echo ""
 
-echo "📋 2/4 Format check with black..."
-black --check src/
+echo "📋 2/4 Format check with ruff..."
+ruff format --check src/
 echo "✅ Format check passed!"
 echo ""
 
@@ -32,4 +32,3 @@ echo "🎉 All CI checks passed!"
 echo "========================"
 echo ""
 echo "Your code is ready to push! 🚀"
-

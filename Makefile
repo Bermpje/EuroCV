@@ -10,7 +10,7 @@ help:
 	@echo "Checks (same as CI):"
 	@echo "  make check          Run all checks (lint, format, type, test)"
 	@echo "  make lint           Run ruff linter"
-	@echo "  make format         Run black formatter"
+	@echo "  make format         Run ruff formatter"
 	@echo "  make type-check     Run mypy type checker"
 	@echo "  make test           Run pytest tests"
 	@echo ""
@@ -36,12 +36,12 @@ lint-fix:
 	ruff check src/ --fix
 
 format:
-	@echo "✨ Running black formatter..."
-	black src/
+	@echo "✨ Running ruff formatter..."
+	ruff format src/
 
 format-check:
-	@echo "✨ Checking black formatting..."
-	black --check src/
+	@echo "✨ Checking ruff formatting..."
+	ruff format --check src/
 
 type-check:
 	@echo "🔎 Running mypy type checker..."

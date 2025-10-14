@@ -42,9 +42,9 @@ jobs:
       run: |
         ruff check src/
 
-    - name: Format check with black
+    - name: Format check with ruff
       run: |
-        black --check src/
+        ruff format --check src/
 
     - name: Type check with mypy
       run: |
