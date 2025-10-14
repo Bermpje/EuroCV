@@ -311,7 +311,9 @@ class GenericPDFExtractor(ResumeExtractor):
 
         # Extract certifications
         if "certification" in sections:
-            resume.certifications = self._extract_certifications(sections["certification"])
+            resume.certifications = self._extract_certifications(
+                sections["certification"]
+            )
 
         # Extract summary
         if "summary" in sections or "profile" in sections:
@@ -337,9 +339,7 @@ class GenericPDFExtractor(ResumeExtractor):
             info.email = email_matches[0]
 
         # Extract phone - look more carefully in header
-        phone_pattern = (
-            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        )
+        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
         # Look in first 2000 chars for phone in header/contact section
         phone_matches = re.findall(phone_pattern, text[:2000])
         if phone_matches:
@@ -347,7 +347,9 @@ class GenericPDFExtractor(ResumeExtractor):
             valid_phones = [
                 p
                 for p in phone_matches
-                if not re.match(r"^\d{4}$", p.replace(" ", "").replace("-", "").replace(".", ""))
+                if not re.match(
+                    r"^\d{4}$", p.replace(" ", "").replace("-", "").replace(".", "")
+                )
             ]
             if valid_phones:
                 info.phone = valid_phones[0]
@@ -422,7 +424,9 @@ class GenericPDFExtractor(ResumeExtractor):
                 r"\|",  # Pipes (often in titles)
             ]
 
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
+            if any(
+                re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns
+            ):
                 continue
 
             # Check if line looks like a name
@@ -432,7 +436,8 @@ class GenericPDFExtractor(ResumeExtractor):
             if 2 <= len(words) <= 3:
                 # Check if all words are title case and mostly alpha
                 if all(
-                    word[0].isupper() and word.replace("-", "").replace("'", "").isalpha()
+                    word[0].isupper()
+                    and word.replace("-", "").replace("'", "").isalpha()
                     for word in words
                     if word
                 ):
@@ -470,7 +475,8 @@ class GenericPDFExtractor(ResumeExtractor):
 
                     # Bonus for credential format (e.g., "Name, MSc")
                     if "," in line and any(
-                        cred in line.lower() for cred in ["msc", "bsc", "phd", "ma", "ba", "mba"]
+                        cred in line.lower()
+                        for cred in ["msc", "bsc", "phd", "ma", "ba", "mba"]
                     ):
                         score += 5
 
@@ -485,8 +491,12 @@ class GenericPDFExtractor(ResumeExtractor):
                     parts = [p.strip() for p in line.split(",")]
                     name_part = parts[0]
                     words = name_part.split()
-                    if 2 <= len(words) <= 3 and all(word and word[0].isupper() for word in words):
-                        candidates.append((10, words, i, line))  # High score for comma format
+                    if 2 <= len(words) <= 3 and all(
+                        word and word[0].isupper() for word in words
+                    ):
+                        candidates.append(
+                            (10, words, i, line)
+                        )  # High score for comma format
 
         # Sort by score and pick best candidate
         if candidates:
@@ -607,7 +617,11 @@ class GenericPDFExtractor(ResumeExtractor):
         for section_key, keywords in self.SECTION_HEADERS.items():
             # Create a regex pattern that matches keywords as standalone headers
             # Must be at start of line or after newline, and followed by newline/whitespace
-            pattern = r"(?im)^[ \t]*(" + "|".join(re.escape(kw) for kw in keywords) + r")[ \t]*$"
+            pattern = (
+                r"(?im)^[ \t]*("
+                + "|".join(re.escape(kw) for kw in keywords)
+                + r")[ \t]*$"
+            )
             # Map internal keys to consistent names
             if section_key == "work":
                 section_patterns["experience"] = pattern
@@ -654,7 +668,9 @@ class GenericPDFExtractor(ResumeExtractor):
 
             content = text[start:end].strip()
             # Remove the header line
-            content = re.sub(f"^{re.escape(header)}", "", content, flags=re.IGNORECASE).strip()
+            content = re.sub(
+                f"^{re.escape(header)}", "", content, flags=re.IGNORECASE
+            ).strip()
 
             sections[key] = content
 
@@ -690,7 +706,9 @@ class GenericPDFExtractor(ResumeExtractor):
             # Check if this position starts a date pattern: text, start_date, end_date, content_after
             if i + 3 <= len(entries):
                 before_text = entries[i].strip()
-                start_date_str = entries[i + 1].strip() if i + 1 < len(entries) else None
+                start_date_str = (
+                    entries[i + 1].strip() if i + 1 < len(entries) else None
+                )
                 end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
                 content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
 
@@ -732,12 +750,18 @@ class GenericPDFExtractor(ResumeExtractor):
                     # Extract description from content after dates
                     # Stop when we encounter what looks like next job title (uppercase line) or take first few lines
                     content_lines = [
-                        line.strip() for line in content_after.split("\n") if line.strip()
+                        line.strip()
+                        for line in content_after.split("\n")
+                        if line.strip()
                     ]
                     desc_lines = []
                     for line in content_lines[:20]:
                         # Stop if we hit what looks like a new job entry (all uppercase, not a bullet)
-                        if line.isupper() and len(line) > 5 and not line.startswith("•"):
+                        if (
+                            line.isupper()
+                            and len(line) > 5
+                            and not line.startswith("•")
+                        ):
                             break
                         # Include bullet point lines and regular text
                         if line:
@@ -915,7 +939,11 @@ class GenericPDFExtractor(ResumeExtractor):
         if current_edu:
             education_list.append(current_edu)
 
-        return education_list if education_list else [Education(description=text.strip()[:1000])]
+        return (
+            education_list
+            if education_list
+            else [Education(description=text.strip()[:1000])]
+        )
 
     def _extract_languages(self, text: str) -> list[Language]:
         """Extract language skills with native/foreign language detection.
@@ -978,7 +1006,9 @@ class GenericPDFExtractor(ResumeExtractor):
                             # Look for keywords within 50 chars of language name
                             context_near = text[max(0, lang_pos - 50) : lang_pos + 50]
                             for prof_text, cefr_level in self.PROFICIENCY_MAP.items():
-                                if re.search(rf"\b{prof_text}\b", context_near, re.IGNORECASE):
+                                if re.search(
+                                    rf"\b{prof_text}\b", context_near, re.IGNORECASE
+                                ):
                                     if cefr_level == "Native":
                                         language.is_native = True
                                     else:

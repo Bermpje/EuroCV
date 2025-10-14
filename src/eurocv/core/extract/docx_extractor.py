@@ -156,9 +156,7 @@ class DOCXExtractor(ResumeExtractor):
             info.email = email_matches[0]
 
         # Extract phone
-        phone_pattern = (
-            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        )
+        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
         phone_matches = re.findall(phone_pattern, text[:500])
         if phone_matches:
             info.phone = phone_matches[0]
@@ -204,7 +202,9 @@ class DOCXExtractor(ResumeExtractor):
                 end = len(text)
 
             content = text[start:end].strip()
-            content = re.sub(f"^{re.escape(header)}", "", content, flags=re.IGNORECASE).strip()
+            content = re.sub(
+                f"^{re.escape(header)}", "", content, flags=re.IGNORECASE
+            ).strip()
             sections[key] = content
 
         return sections
@@ -254,7 +254,9 @@ class DOCXExtractor(ResumeExtractor):
                 language = Language(language=lang)
 
                 context = text[
-                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(lang.lower())
+                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(
+                        lang.lower()
+                    )
                     + 100
                 ]
                 cefr_match = re.search(cefr_pattern, context)

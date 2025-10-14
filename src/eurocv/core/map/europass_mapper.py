@@ -63,7 +63,9 @@ class EuropassMapper:
 
         # Education
         if resume.education:
-            learner_info["Education"] = [self._map_education(edu) for edu in resume.education]
+            learner_info["Education"] = [
+                self._map_education(edu) for edu in resume.education
+            ]
 
         # Skills (includes languages via _map_skills)
         skills = self._map_skills(resume)
@@ -140,7 +142,9 @@ class EuropassMapper:
             }
 
         if pi.nationality:
-            demographics["Nationality"] = [{"Code": pi.nationality, "Label": pi.nationality}]  # type: ignore[assignment]
+            demographics["Nationality"] = [
+                {"Code": pi.nationality, "Label": pi.nationality}
+            ]  # type: ignore[assignment]
 
         if demographics:
             identification["Demographics"] = demographics
@@ -278,7 +282,9 @@ class EuropassMapper:
         if edu.city or edu.country:
             organization["ContactInfo"] = {"Address": {"Contact": {}}}
             if edu.city:
-                organization["ContactInfo"]["Address"]["Contact"]["Municipality"] = edu.city
+                organization["ContactInfo"]["Address"]["Contact"]["Municipality"] = (
+                    edu.city
+                )
             if edu.country:
                 country_code = self._get_country_code(edu.country)
                 organization["ContactInfo"]["Address"]["Contact"]["Country"] = {
@@ -320,9 +326,13 @@ class EuropassMapper:
 
             for lang in resume.languages:
                 if lang.is_native:
-                    linguistic["MotherTongue"].append({"Description": {"Label": lang.language}})
+                    linguistic["MotherTongue"].append(
+                        {"Description": {"Label": lang.language}}
+                    )
                 else:
-                    foreign_lang: dict[str, Any] = {"Description": {"Label": lang.language}}
+                    foreign_lang: dict[str, Any] = {
+                        "Description": {"Label": lang.language}
+                    }
 
                     # CEFR levels
                     if any([lang.listening, lang.reading, lang.speaking, lang.writing]):
@@ -457,7 +467,10 @@ class EuropassMapper:
         title_lower = title.lower()
 
         # Doctoral (ISCED 8)
-        if any(word in title_lower for word in ["phd", "ph.d", "doctorate", "doctoral", "doctor"]):
+        if any(
+            word in title_lower
+            for word in ["phd", "ph.d", "doctorate", "doctoral", "doctor"]
+        ):
             return {"Code": "8", "Label": "Doctoral or equivalent"}
 
         # Master (ISCED 7) - check BEFORE bachelor to avoid false matches
@@ -519,7 +532,9 @@ class EuropassMapper:
             return {"Code": "3", "Label": "Upper secondary education"}
 
         # Vocational secondary (ISCED 3/4)
-        if any(word in title_lower for word in ["mbo", "vocational", "technical college"]):
+        if any(
+            word in title_lower for word in ["mbo", "vocational", "technical college"]
+        ):
             return {"Code": "3", "Label": "Upper secondary education"}
 
         return None

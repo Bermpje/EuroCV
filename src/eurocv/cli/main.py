@@ -23,14 +23,28 @@ console = Console()
 
 @app.command()
 def convert(
-    input_file: Path = typer.Argument(..., help="Input resume file (PDF or DOCX)", exists=True),
-    out: Optional[Path] = typer.Option(None, "--out", "-o", help="Output JSON file path"),
-    out_json: Optional[Path] = typer.Option(None, "--out-json", help="Output JSON file path"),
-    out_xml: Optional[Path] = typer.Option(None, "--out-xml", help="Output XML file path"),
-    locale: str = typer.Option("en-US", "--locale", "-l", help="Locale (e.g., nl-NL, en-US)"),
-    no_photo: bool = typer.Option(False, "--no-photo", help="Exclude photo (GDPR-friendly)"),
+    input_file: Path = typer.Argument(
+        ..., help="Input resume file (PDF or DOCX)", exists=True
+    ),
+    out: Optional[Path] = typer.Option(
+        None, "--out", "-o", help="Output JSON file path"
+    ),
+    out_json: Optional[Path] = typer.Option(
+        None, "--out-json", help="Output JSON file path"
+    ),
+    out_xml: Optional[Path] = typer.Option(
+        None, "--out-xml", help="Output XML file path"
+    ),
+    locale: str = typer.Option(
+        "en-US", "--locale", "-l", help="Locale (e.g., nl-NL, en-US)"
+    ),
+    no_photo: bool = typer.Option(
+        False, "--no-photo", help="Exclude photo (GDPR-friendly)"
+    ),
     use_ocr: bool = typer.Option(False, "--ocr", help="Use OCR for scanned PDFs"),
-    validate: bool = typer.Option(True, "--validate/--no-validate", help="Validate output"),
+    validate: bool = typer.Option(
+        True, "--validate/--no-validate", help="Validate output"
+    ),
     pretty: bool = typer.Option(True, "--pretty/--compact", help="Pretty-print JSON"),
 ) -> None:
     """Convert a resume file to Europass format.
@@ -121,11 +135,15 @@ def convert(
 @app.command()
 def batch(
     input_pattern: str = typer.Argument(..., help="Input file pattern (e.g., '*.pdf')"),
-    out_dir: Path = typer.Option(Path("output"), "--out-dir", "-d", help="Output directory"),
+    out_dir: Path = typer.Option(
+        Path("output"), "--out-dir", "-d", help="Output directory"
+    ),
     locale: str = typer.Option("en-US", "--locale", "-l", help="Locale"),
     no_photo: bool = typer.Option(False, "--no-photo", help="Exclude photos"),
     use_ocr: bool = typer.Option(False, "--ocr", help="Use OCR for scanned PDFs"),
-    parallel: int = typer.Option(1, "--parallel", "-p", help="Number of parallel workers"),
+    parallel: int = typer.Option(
+        1, "--parallel", "-p", help="Number of parallel workers"
+    ),
     format: Literal["json", "xml", "both"] = typer.Option(
         "json", "--format", "-f", help="Output format (json/xml/both)"
     ),
@@ -208,7 +226,9 @@ def batch(
 
 @app.command()
 def validate(
-    input_file: Path = typer.Argument(..., help="Europass JSON or XML file", exists=True),
+    input_file: Path = typer.Argument(
+        ..., help="Europass JSON or XML file", exists=True
+    ),
     schema: Optional[Path] = typer.Option(None, "--schema", help="Custom schema file"),
 ) -> None:
     """Validate a Europass JSON or XML file against the schema.

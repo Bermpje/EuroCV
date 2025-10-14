@@ -48,6 +48,5 @@ def get_extractor(file_path: str, use_ocr: bool = False) -> ResumeExtractor:
 
     # No suitable extractor found
     raise ValueError(
-        f"No suitable extractor found for: {file_path}. "
-        f"Supported formats: PDF, DOCX"
+        f"No suitable extractor found for: {file_path}. Supported formats: PDF, DOCX"
     )
