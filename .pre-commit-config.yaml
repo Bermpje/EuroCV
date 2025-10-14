@@ -13,12 +13,11 @@ repos:
         args: [--fix]
       - id: ruff
         name: ruff-check
-        args: [check, src/]
       - id: ruff-format
         name: ruff-format
       - id: ruff-format
         name: ruff-format-check
-        args: [--check, src/]
+        args: [--check]
 
   # MyPy - Type checker
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -51,13 +50,11 @@ repos:
       - id: debug-statements
 
   # Pytest - Run tests on commit (matches CI)
-  # Currently disabled due to 10 failing tests from multi-extractor refactoring
-  # Re-enable after fixing tests
-  # - repo: local
-  #   hooks:
-  #     - id: pytest
-  #       name: pytest
-  #       entry: uv run pytest
-  #       language: system
-  #       pass_filenames: false
-  #       always_run: true
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true

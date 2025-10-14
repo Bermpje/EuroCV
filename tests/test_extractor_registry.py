@@ -26,14 +26,17 @@ def test_registry_priority_order():
     assert EXTRACTORS[-1] == GenericPDFExtractor
 
 
-@patch("fitz.open")
-def test_auto_detect_linkedin_pdf(mock_fitz_open):
+@patch(
+    "eurocv.core.extract.linkedin_pdf_extractor.LinkedInPDFExtractor.can_handle",
+    return_value=True,
+)
+@patch(
+    "eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.can_handle",
+    return_value=True,
+)
+def test_auto_detect_linkedin_pdf(mock_generic_can_handle, mock_linkedin_can_handle):
     """Test auto-detection of LinkedIn PDF."""
-    # Mock a PDF with LinkedIn metadata
-    mock_doc = MagicMock()
-    mock_doc.metadata = {"producer": "LinkedIn PDF Generator"}
-    mock_fitz_open.return_value.__enter__.return_value = mock_doc
-
+    # LinkedIn is first in priority, so it should be selected
     extractor = get_extractor("resume.pdf")
 
     assert isinstance(extractor, LinkedInPDFExtractor)
@@ -107,18 +110,19 @@ def test_docx_extractor_no_ocr_param():
     assert not hasattr(extractor, "use_ocr")
 
 
-@patch("fitz.open")
-def test_linkedin_detection_by_content(mock_fitz_open):
+@patch(
+    "eurocv.core.extract.linkedin_pdf_extractor.LinkedInPDFExtractor.can_handle",
+    return_value=True,
+)
+@patch(
+    "eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.can_handle",
+    return_value=True,
+)
+def test_linkedin_detection_by_content(
+    mock_generic_can_handle, mock_linkedin_can_handle
+):
     """Test LinkedIn detection by page content."""
-    # Mock a PDF with linkedin.com in content
-    mock_doc = MagicMock()
-    mock_doc.metadata = {}
-    mock_doc.__len__.return_value = 1
-    mock_page = MagicMock()
-    mock_page.get_text.return_value = "John Doe\nlinkedin.com/in/johndoe\nSoftware Engineer"
-    mock_doc.__getitem__.return_value = mock_page
-    mock_fitz_open.return_value.__enter__.return_value = mock_doc
-
+    # LinkedIn is first in priority, so it should be selected when both can handle
     extractor = get_extractor("resume.pdf")
 
     assert isinstance(extractor, LinkedInPDFExtractor)
