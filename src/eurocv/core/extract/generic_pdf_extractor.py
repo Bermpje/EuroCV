@@ -276,9 +276,23 @@ class GenericPDFExtractor(ResumeExtractor):
         sections = self._split_into_sections(text)
 
         # Extract work experience
+        # Due to PDF column layouts, work experiences may appear in multiple sections
+        work_experiences = []
         if "experience" in sections or "work" in sections:
             work_section = sections.get("experience") or sections.get("work", "")
-            resume.work_experience = self._extract_work_experience(work_section)
+            work_experiences.extend(self._extract_work_experience(work_section))
+
+        # Also check language section (column layout may place work exp there)
+        if "language" in sections:
+            lang_section = sections["language"]
+            # Only extract if it contains job-like entries (has date ranges with positions)
+            if re.search(
+                r"[A-Z\s]{10,}\n[A-Z\s]{5,}\n(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Okt)\s+\d{4}\s*[-–—]",
+                lang_section,
+            ):
+                work_experiences.extend(self._extract_work_experience(lang_section))
+
+        resume.work_experience = work_experiences
 
         # Extract education
         if "education" in sections:
@@ -322,13 +336,21 @@ class GenericPDFExtractor(ResumeExtractor):
         if email_matches:
             info.email = email_matches[0]
 
-        # Extract phone
+        # Extract phone - look more carefully in header
         phone_pattern = (
             r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
         )
-        phone_matches = re.findall(phone_pattern, text[:500])  # Look in first 500 chars
+        # Look in first 2000 chars for phone in header/contact section
+        phone_matches = re.findall(phone_pattern, text[:2000])
         if phone_matches:
-            info.phone = phone_matches[0]
+            # Filter out years (4 digits only)
+            valid_phones = [
+                p
+                for p in phone_matches
+                if not re.match(r"^\d{4}$", p.replace(" ", "").replace("-", "").replace(".", ""))
+            ]
+            if valid_phones:
+                info.phone = valid_phones[0]
 
         # Extract name (improved heuristic)
         info.first_name, info.last_name = self._extract_name(text)
@@ -446,7 +468,25 @@ class GenericPDFExtractor(ResumeExtractor):
                     ):
                         score += 2
 
+                    # Bonus for credential format (e.g., "Name, MSc")
+                    if "," in line and any(
+                        cred in line.lower() for cred in ["msc", "bsc", "phd", "ma", "ba", "mba"]
+                    ):
+                        score += 5
+
                     candidates.append((score, words, i, line))
+
+        # After checking standard format, try comma-separated format
+        if not candidates:
+            for i, line in enumerate(lines[:30]):
+                line = line.strip()
+                # Check for "Firstname Lastname, Credentials" format
+                if "," in line and 2 <= len(line.split(",")[0].split()) <= 3:
+                    parts = [p.strip() for p in line.split(",")]
+                    name_part = parts[0]
+                    words = name_part.split()
+                    if 2 <= len(words) <= 3 and all(word and word[0].isupper() for word in words):
+                        candidates.append((10, words, i, line))  # High score for comma format
 
         # Sort by score and pick best candidate
         if candidates:
@@ -512,6 +552,42 @@ class GenericPDFExtractor(ResumeExtractor):
                             if len(city) > 2 and len(city) < 30 and not city.isdigit():
                                 return city, country
 
+        # Check for standalone city names (Dutch cities)
+        dutch_cities = [
+            "Amsterdam",
+            "Rotterdam",
+            "Den Haag",
+            "Utrecht",
+            "Eindhoven",
+            "Groningen",
+            "Tilburg",
+            "Almere",
+            "Breda",
+            "Nijmegen",
+            "Roosendaal",
+            "Apeldoorn",
+            "Haarlem",
+            "Arnhem",
+            "Zaanstad",
+            "Enschede",
+            "Amersfoort",
+            "Zwolle",
+            "Leiden",
+            "Maastricht",
+            "Dordrecht",
+            "Alphen aan den Rijn",
+            "Westland",
+            "Zoetermeer",
+        ]
+
+        for line in lines[:50]:
+            line_clean = line.strip()
+            for city in dutch_cities:
+                if city.lower() in line_clean.lower():
+                    # Check if this is likely a location (not part of company name)
+                    if len(line_clean) < 50:  # Short line = likely just location
+                        return city, "Netherlands"
+
         return None, None
 
     def _split_into_sections(self, text: str) -> dict[str, str]:
@@ -526,10 +602,12 @@ class GenericPDFExtractor(ResumeExtractor):
         sections = {}
 
         # Build section patterns from SECTION_HEADERS
+        # Match only when keyword is on its own line (section header, not in text)
         section_patterns = {}
         for section_key, keywords in self.SECTION_HEADERS.items():
-            # Create a regex pattern that matches any of the keywords
-            pattern = r"(?i)\b(" + "|".join(re.escape(kw) for kw in keywords) + r")\b"
+            # Create a regex pattern that matches keywords as standalone headers
+            # Must be at start of line or after newline, and followed by newline/whitespace
+            pattern = r"(?im)^[ \t]*(" + "|".join(re.escape(kw) for kw in keywords) + r")[ \t]*$"
             # Map internal keys to consistent names
             if section_key == "work":
                 section_patterns["experience"] = pattern
@@ -555,12 +633,24 @@ class GenericPDFExtractor(ResumeExtractor):
         section_positions.sort()
 
         # Extract section content
+        # Special handling: For CV with sidebar layout, ERVARING/experience section shouldn't be
+        # truncated by sidebar sections (talen, certificaten, software, contact)
+        sidebar_sections = {"language", "certification", "contact"}
+
         for i, (start, key, header) in enumerate(section_positions):
-            # Find end of section (next section or end of text)
+            # Find end of section (next MAJOR section or end of text)
+            end = len(text)
             if i + 1 < len(section_positions):
-                end = section_positions[i + 1][0]
-            else:
-                end = len(text)
+                # If this is experience section, skip over sidebar sections to find real end
+                if key == "experience":
+                    for j in range(i + 1, len(section_positions)):
+                        next_key = section_positions[j][1]
+                        # Stop at major sections but not sidebar sections
+                        if next_key not in sidebar_sections:
+                            end = section_positions[j][0]
+                            break
+                else:
+                    end = section_positions[i + 1][0]
 
             content = text[start:end].strip()
             # Remove the header line
@@ -593,89 +683,73 @@ class GenericPDFExtractor(ResumeExtractor):
         entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
 
         # Process entries
+        # After split by date pattern, we get: [text_before_1, start1, end1, text_after_1, start2, end2, text_after_2, ...]
+        # Note: text_after_1 contains both description AND text_before_2
         i = 0
         while i < len(entries):
-            # Check if we have a date range match (3 parts: before, start_date, end_date)
-            if i + 2 < len(entries):
+            # Check if this position starts a date pattern: text, start_date, end_date, content_after
+            if i + 3 <= len(entries):
                 before_text = entries[i].strip()
                 start_date_str = entries[i + 1].strip() if i + 1 < len(entries) else None
                 end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
-
-                # Get the content after the dates (description)
                 content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
 
-                if start_date_str and end_date_str:
-                    # Validate this looks like a real work entry (not a random date in description)
-                    # Must have some text before the dates (at least a position title)
-                    if len(before_text.strip()) < 10:
-                        i += 4
+                # Check if we have valid date strings
+                if start_date_str and end_date_str and before_text:
+                    # Validate this looks like a real work entry
+                    # Must have some text before dates (position/company)
+                    if len(before_text) < 5:
+                        i += 1
                         continue
 
                     exp = WorkExperience()
 
                     # Parse dates
                     exp.start_date = self._parse_date(start_date_str)
-                    # Check for "present" in multiple languages
-                    if end_date_str.lower() in [kw.lower() for kw in self.PRESENT_KEYWORDS]:
+                    if any(
+                        keyword in end_date_str.lower()
+                        for keyword in ["heden", "present", "current", "nu"]
+                    ):
                         exp.current = True
                         exp.end_date = None
                     else:
                         exp.end_date = self._parse_date(end_date_str)
 
                     # Extract position and employer from text before dates
-                    # LinkedIn format: Company / Duration / Position / Date
+                    # The before_text might contain description from previous entry, so extract last 2-3 lines
                     lines_before = [
                         line.strip() for line in before_text.split("\n") if line.strip()
                     ]
+                    # Take the last 1-2 non-empty lines as position/company (they're right before the date)
                     if lines_before:
-                        # Last non-empty line before dates is usually the position
-                        exp.position = lines_before[-1] if lines_before else None
+                        if len(lines_before) >= 2:
+                            # Last line is likely company, second-to-last is position
+                            exp.position = lines_before[-2]
+                            exp.employer = lines_before[-1]
+                        else:
+                            exp.position = lines_before[-1]
 
-                        # Find the employer (company name)
-                        # It's typically the FIRST line, or a line that doesn't look like duration/position
-                        if len(lines_before) >= 3:
-                            # If we have 3+ lines, first is likely company, second is duration, third is position
-                            exp.employer = lines_before[0]
-                        elif len(lines_before) == 2:
-                            # If we have 2 lines, check if second-to-last is a duration
-                            potential_employer = lines_before[-2]
-                            if not re.search(
-                                r"\d+\s+(year|month|day)",
-                                potential_employer,
-                                re.IGNORECASE,
-                            ) and not re.search(r"page\s+\d+", potential_employer, re.IGNORECASE):
-                                exp.employer = potential_employer
-
-                    # Extract location and description from content after dates
+                    # Extract description from content after dates
+                    # Stop when we encounter what looks like next job title (uppercase line) or take first few lines
                     content_lines = [
-                        line.strip() for line in content_after.split("\n")[:20] if line.strip()
+                        line.strip() for line in content_after.split("\n") if line.strip()
                     ]
+                    desc_lines = []
+                    for line in content_lines[:20]:
+                        # Stop if we hit what looks like a new job entry (all uppercase, not a bullet)
+                        if line.isupper() and len(line) > 5 and not line.startswith("•"):
+                            break
+                        # Include bullet point lines and regular text
+                        if line:
+                            desc_lines.append(line)
 
-                    # First line after dates often contains location
-                    if content_lines:
-                        first_line = content_lines[0]
-                        # Check if it looks like a location
-                        if any(
-                            word in first_line
-                            for word in [
-                                "Netherlands",
-                                "Holland",
-                                "Amsterdam",
-                                "Utrecht",
-                            ]
-                        ):
-                            location_parts = first_line.split(",")
-                            if len(location_parts) >= 2:
-                                exp.city = location_parts[0].strip()
-                                exp.country = location_parts[-1].strip()
-                            content_lines = content_lines[1:]  # Remove location from description
-
-                    # Remaining lines are description/activities
-                    if content_lines:
-                        exp.description = "\n".join(content_lines[:10])  # Limit to first 10 lines
+                    if desc_lines:
+                        exp.description = "\n".join(desc_lines[:10])
 
                     experiences.append(exp)
-                    i += 4  # Skip the processed parts
+                    # Move to next entry: skip current (text, start, end, content)
+                    # Next entry starts at content_after, so move by 3
+                    i += 3
                     continue
 
             i += 1
@@ -762,7 +836,7 @@ class GenericPDFExtractor(ResumeExtractor):
         return None
 
     def _extract_education(self, text: str) -> list[Education]:
-        """Extract education entries.
+        """Extract education entries with improved multi-degree support.
 
         Args:
             text: Education section text
@@ -772,103 +846,76 @@ class GenericPDFExtractor(ResumeExtractor):
         """
         education_list = []
 
-        # Common university/school keywords
-        institution_keywords = [
-            "university",
-            "universiteit",
-            "college",
-            "school",
-            "hogeschool",
-            "institute",
-            "academy",
-            "polytechnic",
-        ]
-
-        # Split by lines and look for institution names
+        # Split by year ranges first to separate entries
+        # Pattern: look for lines with 4-digit years (2014-2016, 2008-2011)
         lines = text.split("\n")
+        current_entry = []
         current_edu = None
-        current_lines = []
 
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
                 continue
 
-            # Check if line contains an institution name
-            is_institution = any(
-                keyword in line_stripped.lower() for keyword in institution_keywords
-            )
+            # Check for date range (likely marks new entry boundary)
+            date_match = re.search(r"(\d{4})\s*[-–—]\s*(\d{4})", line_stripped)
 
-            # Check if line contains a degree pattern
-            degree_patterns = [
-                r"bachelor",
-                r"master",
-                r"phd",
-                r"doctorate",
-                r"degree",
-                r"msc",
-                r"bsc",
-                r"ma",
-                r"ba",
-                r"mba",
-            ]
-            has_degree = any(
-                re.search(pattern, line_stripped, re.IGNORECASE) for pattern in degree_patterns
-            )
-
-            # Start new entry if we find an institution or degree
-            if is_institution or (has_degree and not current_edu):
+            if date_match:
                 # Save previous entry if exists
-                if current_edu and current_lines:
-                    current_edu.description = "\n".join(current_lines[:10])
+                if current_edu:
                     education_list.append(current_edu)
 
                 # Start new entry
                 current_edu = Education()
-                current_lines = []
+                start_year = int(date_match.group(1))
+                end_year = int(date_match.group(2))
+                from datetime import date as date_class
 
-                if is_institution:
-                    current_edu.organization = line_stripped
-                elif has_degree:
-                    current_edu.title = line_stripped
+                current_edu.start_date = date_class(start_year, 9, 1)
+                current_edu.end_date = date_class(end_year, 6, 30)
+                current_entry = [line_stripped]
+                continue
 
-            # Accumulate lines for current entry
             if current_edu:
-                # Try to extract dates from this line
-                date_match = re.search(r"(\d{4})\s*[-–—]\s*(\d{4})", line_stripped)
-                if date_match:
-                    start_year = int(date_match.group(1))
-                    end_year = int(date_match.group(2))
-                    from datetime import date as date_class
+                current_entry.append(line_stripped)
 
-                    current_edu.start_date = date_class(start_year, 9, 1)  # Assume September start
-                    current_edu.end_date = date_class(end_year, 6, 30)  # Assume June end
-                elif re.search(r"\b(\d{4})\b", line_stripped):
-                    # Single year mention
-                    year = int(re.search(r"\b(\d{4})\b", line_stripped).group(1))
-                    if not current_edu.end_date:
-                        from datetime import date as date_class
+                # Check for organization (university keyword)
+                if not current_edu.organization and any(
+                    keyword in line_stripped.lower()
+                    for keyword in [
+                        "universiteit",
+                        "university",
+                        "hogeschool",
+                        "college",
+                        "school",
+                    ]
+                ):
+                    current_edu.organization = line_stripped
 
-                        current_edu.end_date = date_class(year, 6, 30)
-
-                # Check for degree in line if title not set
-                if not current_edu.title and has_degree:
-                    current_edu.title = line_stripped
-
-                current_lines.append(line_stripped)
+                # Check for degree title (uppercase words, degree keywords)
+                elif not current_edu.title:
+                    degree_keywords = [
+                        "bachelor",
+                        "master",
+                        "phd",
+                        "msc",
+                        "bsc",
+                        "hbo",
+                        "wo",
+                        "sociologie",
+                        "hrm",
+                    ]
+                    if (
+                        any(kw in line_stripped.lower() for kw in degree_keywords)
+                        or line_stripped.isupper()
+                    ):
+                        current_edu.title = line_stripped
 
         # Don't forget last entry
         if current_edu:
-            if current_lines:
-                current_edu.description = "\n".join(current_lines[:10])
             education_list.append(current_edu)
 
-        # Fallback: if no structured entries found, create one with all text
-        if not education_list and text.strip():
-            edu = Education(description=text.strip()[:1000])
-            education_list.append(edu)
-
-        return education_list
+        return education_list if education_list else [Education(description=text.strip()[:1000])]
 
     def _extract_languages(self, text: str) -> list[Language]:
         """Extract language skills with native/foreign language detection.
@@ -927,9 +974,11 @@ class GenericPDFExtractor(ResumeExtractor):
                             language.speaking = level
                             language.writing = level
                         else:
-                            # Try to find proficiency description using class PROFICIENCY_MAP
+                            # Check proficiency keywords more carefully
+                            # Look for keywords within 50 chars of language name
+                            context_near = text[max(0, lang_pos - 50) : lang_pos + 50]
                             for prof_text, cefr_level in self.PROFICIENCY_MAP.items():
-                                if re.search(rf"\b{prof_text}\b", context, re.IGNORECASE):
+                                if re.search(rf"\b{prof_text}\b", context_near, re.IGNORECASE):
                                     if cefr_level == "Native":
                                         language.is_native = True
                                     else:
@@ -958,6 +1007,11 @@ class GenericPDFExtractor(ResumeExtractor):
         # Split by common delimiters
         skill_items = re.split(r"[,•\n·]", text)
 
+        # Also try splitting by multiple spaces (common in CVs)
+        if len(skill_items) < 3:
+            # Try splitting by double space or newline
+            skill_items = re.split(r"\s{2,}|\n", text)
+
         # Noise words to skip (common resume fluff)
         noise_words = {
             "skills",
@@ -972,6 +1026,8 @@ class GenericPDFExtractor(ResumeExtractor):
             "etc",
             "years",
             "page",
+            "vaardigheden",  # Dutch
+            "competenties",  # Dutch
         }
 
         for item in skill_items:
@@ -987,6 +1043,19 @@ class GenericPDFExtractor(ResumeExtractor):
 
             # Skip noise words
             if item.lower() in noise_words:
+                continue
+
+            # Skip if it looks like a section header
+            if any(
+                header in item.lower()
+                for header in [
+                    "vaardigheden",
+                    "skills",
+                    "competenties",
+                    "ervaring",
+                    "experience",
+                ]
+            ):
                 continue
 
             # Skip if contains too many numbers (likely not a skill name)
@@ -1026,7 +1095,7 @@ class GenericPDFExtractor(ResumeExtractor):
                 continue
 
             # Check if line looks like a certification
-            # Usually certification lines have capital letters or known cert names
+            # More lenient - certifications can be various formats
             if any(
                 word in line
                 for word in [
@@ -1036,8 +1105,18 @@ class GenericPDFExtractor(ResumeExtractor):
                     "AWS",
                     "Azure",
                     "Microsoft",
+                    "Vertrouwenspersoon",
+                    "Change",
+                    "Management",
+                    "Agile",
+                    "Scrum",
+                    "Coach",
+                    "Consultant",
+                    "Specialist",
                 ]
-            ):
+            ) or (
+                len(line) > 10 and line[0].isupper()
+            ):  # Or any capitalized line of reasonable length
                 cert = Certification(name=line)
 
                 # Try to extract date from the line
