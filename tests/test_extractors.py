@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 
 from eurocv.core.extract.docx_extractor import DOCXExtractor
+from eurocv.core.extract.linkedin_pdf_extractor import LinkedInPDFExtractor
 from eurocv.core.models import Resume
 
 
