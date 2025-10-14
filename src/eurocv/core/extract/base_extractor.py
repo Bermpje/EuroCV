@@ -1,6 +1,7 @@
 """Base extractor interface for resume extraction."""
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from eurocv.core.models import Resume
 
@@ -11,6 +12,14 @@ class ResumeExtractor(ABC):
     All resume extractors must inherit from this class and implement
     the required methods for extraction and file type detection.
     """
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize extractor.
+
+        Subclasses may accept specific parameters (e.g. use_ocr for PDF extractors).
+        This base implementation accepts any keyword arguments for flexibility.
+        """
+        pass
 
     @abstractmethod
     def extract(self, file_path: str) -> Resume:

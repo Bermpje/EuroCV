@@ -1,6 +1,5 @@
 """Extractor registry for automatic format detection."""
 
-import inspect
 import logging
 
 from eurocv.core.extract.base_extractor import ResumeExtractor
@@ -39,12 +38,8 @@ def get_extractor(file_path: str, use_ocr: bool = False) -> ResumeExtractor:
         >>> resume = extractor.extract("resume.pdf")
     """
     for extractor_class in EXTRACTORS:
-        # Check if extractor constructor accepts use_ocr parameter
-        init_signature = inspect.signature(extractor_class.__init__)
-        if "use_ocr" in init_signature.parameters:
-            extractor = extractor_class(use_ocr=use_ocr)
-        else:
-            extractor = extractor_class()
+        # All extractors accept **kwargs, so we can safely pass use_ocr
+        extractor = extractor_class(use_ocr=use_ocr)
 
         # Check if this extractor can handle the file
         if extractor.can_handle(file_path):
@@ -53,5 +48,6 @@ def get_extractor(file_path: str, use_ocr: bool = False) -> ResumeExtractor:
 
     # No suitable extractor found
     raise ValueError(
-        f"No suitable extractor found for: {file_path}. " f"Supported formats: PDF, DOCX"
+        f"No suitable extractor found for: {file_path}. "
+        f"Supported formats: PDF, DOCX"
     )
