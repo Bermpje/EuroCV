@@ -4,7 +4,9 @@ Convert resumes (PDF/DOCX) to Europass XML/JSON format with CLI, Python API, and
 
 ## Features
 
-- 📄 **Multi-format support**: Parse PDF and DOCX resumes
+- 📄 **Multi-format support**: Parse PDF and DOCX resumes with auto-detection
+- 🤖 **Smart Extractors**: LinkedIn PDF, Generic PDF (with Dutch support), and DOCX extractors
+- 🌍 **Multi-language**: Native support for English and Dutch resumes
 - 🇪🇺 **Europass compliant**: Validates against official Europass schemas
 - 🐍 **Python API**: Use as a library in your Python projects
 - 💻 **CLI tool**: Command-line interface for batch processing
@@ -218,4 +220,3 @@ For issues and questions:
 - [ ] AI-powered field extraction
 - [ ] Europass PDF rendering
 - [ ] Multi-language support
-

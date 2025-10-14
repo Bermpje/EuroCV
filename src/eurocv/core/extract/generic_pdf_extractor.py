@@ -1,4 +1,4 @@
-"""PDF extraction functionality."""
+"""Generic PDF extraction functionality with multi-language support."""
 
 import re
 from datetime import date
@@ -9,6 +9,7 @@ import fitz  # PyMuPDF
 from pdfminer.high_level import extract_text as pdfminer_extract_text
 from pdfminer.layout import LAParams
 
+from eurocv.core.extract.base_extractor import ResumeExtractor
 from eurocv.core.models import (
     Certification,
     Education,
@@ -20,8 +21,88 @@ from eurocv.core.models import (
 )
 
 
-class PDFExtractor:
-    """Extract text and structure from PDF files."""
+class GenericPDFExtractor(ResumeExtractor):
+    """Extract text and structure from PDF files with multi-language support.
+
+    Supports English and Dutch language CVs with various layouts including
+    sidebar designs and non-standard formatting.
+    """
+
+    # Multi-language section headers
+    SECTION_HEADERS = {
+        "work": [
+            "work experience",
+            "experience",
+            "employment",
+            "ervaring",
+            "werkervaring",
+            "professional experience",
+        ],
+        "education": ["education", "academic", "opleiding", "onderwijs", "studies"],
+        "skills": [
+            "skills",
+            "competencies",
+            "vaardigheden",
+            "competenties",
+            "expertise",
+        ],
+        "languages": ["languages", "talen", "language skills"],
+        "certifications": [
+            "certifications",
+            "certificates",
+            "certificaten",
+            "licenses",
+        ],
+        "summary": ["summary", "profile", "about", "samenvatting", "profiel"],
+    }
+
+    # Dutch month abbreviations
+    DUTCH_MONTHS = {
+        "jan": "01",
+        "januari": "01",
+        "feb": "02",
+        "februari": "02",
+        "mrt": "03",
+        "maart": "03",
+        "apr": "04",
+        "april": "04",
+        "mei": "05",
+        "jun": "06",
+        "juni": "06",
+        "jul": "07",
+        "juli": "07",
+        "aug": "08",
+        "augustus": "08",
+        "sep": "09",
+        "sept": "09",
+        "september": "09",
+        "okt": "10",
+        "oktober": "10",
+        "nov": "11",
+        "november": "11",
+        "dec": "12",
+        "december": "12",
+    }
+
+    # Keywords for "present" in multiple languages
+    PRESENT_KEYWORDS = ["present", "current", "heden", "nu", "now", "today", "ongoing"]
+
+    # Language proficiency mapping
+    PROFICIENCY_MAP = {
+        "native": "Native",
+        "moedertaal": "Native",
+        "proficient": "C2",
+        "vloeiend": "C2",
+        "fluent": "C2",
+        "advanced": "C1",
+        "gevorderd": "C1",
+        "intermediate": "B1",
+        "gemiddeld": "B1",
+        "basic": "A2",
+        "basis": "A2",
+        "beginner": "A1",
+        "beginner level": "A1",
+    }
 
     def __init__(self, use_ocr: bool = False):
         """Initialize extractor.
@@ -30,6 +111,24 @@ class PDFExtractor:
             use_ocr: Whether to use OCR for scanned PDFs (requires pytesseract)
         """
         self.use_ocr = use_ocr
+
+    @property
+    def name(self) -> str:
+        """Return extractor name."""
+        return "Generic PDF"
+
+    def can_handle(self, file_path: str) -> bool:
+        """Check if this extractor can handle the file.
+
+        Generic extractor accepts all PDF files as fallback.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            True if file is a PDF
+        """
+        return file_path.lower().endswith(".pdf")
 
     def extract(self, file_path: str) -> Resume:
         """Extract resume data from PDF.
@@ -416,7 +515,7 @@ class PDFExtractor:
         return None, None
 
     def _split_into_sections(self, text: str) -> dict[str, str]:
-        """Split resume text into sections.
+        """Split resume text into sections using multi-language headers.
 
         Args:
             text: Resume text
@@ -426,15 +525,20 @@ class PDFExtractor:
         """
         sections = {}
 
-        # Common section headers
-        section_patterns = {
-            "summary": r"(?i)(professional\s+summary|profile|summary|objective)",
-            "experience": r"(?i)(work\s+experience|professional\s+experience|employment|experience)",
-            "education": r"(?i)(education|academic|qualifications)",
-            "skill": r"(?i)(skills|competencies|expertise)",
-            "language": r"(?i)(languages|language\s+skills)",
-            "certification": r"(?i)(certifications?|licenses?|credentials?)",
-        }
+        # Build section patterns from SECTION_HEADERS
+        section_patterns = {}
+        for section_key, keywords in self.SECTION_HEADERS.items():
+            # Create a regex pattern that matches any of the keywords
+            pattern = r"(?i)\b(" + "|".join(re.escape(kw) for kw in keywords) + r")\b"
+            # Map internal keys to consistent names
+            if section_key == "work":
+                section_patterns["experience"] = pattern
+            elif section_key == "certifications":
+                section_patterns["certification"] = pattern
+            elif section_key == "languages":
+                section_patterns["language"] = pattern
+            else:
+                section_patterns[section_key] = pattern
 
         # Find section positions (use FIRST match of each section only)
         section_positions = []
@@ -467,7 +571,7 @@ class PDFExtractor:
         return sections
 
     def _extract_work_experience(self, text: str) -> list[WorkExperience]:
-        """Extract work experience entries.
+        """Extract work experience entries with multi-language support.
 
         Args:
             text: Work experience section text
@@ -478,9 +582,13 @@ class PDFExtractor:
         experiences = []
 
         # Split text into potential entries by looking for date ranges
-        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
-        # More strict: require either full month name or standard abbreviation
-        date_range_pattern = r"((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)"
+        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present/Heden
+        # Support both English and Dutch month names
+        months_en = r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
+        months_nl = r"(?:januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec)"
+        present_keywords = r"(?:Present|present|Current|current|Heden|heden|Nu|nu)"
+
+        date_range_pattern = f"((?:{months_en}|{months_nl})\\s+\\d{{4}})\\s*[-–—]\\s*((?:{months_en}|{months_nl})\\s+\\d{{4}}|{present_keywords})"
 
         entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
 
@@ -507,7 +615,8 @@ class PDFExtractor:
 
                     # Parse dates
                     exp.start_date = self._parse_date(start_date_str)
-                    if end_date_str.lower() == "present":
+                    # Check for "present" in multiple languages
+                    if end_date_str.lower() in [kw.lower() for kw in self.PRESENT_KEYWORDS]:
                         exp.current = True
                         exp.end_date = None
                     else:
@@ -579,10 +688,10 @@ class PDFExtractor:
         return experiences
 
     def _parse_date(self, date_str: str) -> Optional[date]:
-        """Parse date string to date object.
+        """Parse date string to date object with multi-language support.
 
         Args:
-            date_str: Date string like "January 2020" or "Jan 2020"
+            date_str: Date string like "January 2020", "Jan 2020", "januari 2020"
 
         Returns:
             date object or None
@@ -601,19 +710,42 @@ class PDFExtractor:
             if year_match:
                 year = int(year_match.group())
 
+                # Combine English and Dutch month names
                 month_names = {
                     "jan": 1,
+                    "januari": 1,
+                    "january": 1,
                     "feb": 2,
+                    "februari": 2,
+                    "february": 2,
+                    "mrt": 3,
+                    "maart": 3,
                     "mar": 3,
+                    "march": 3,
                     "apr": 4,
+                    "april": 4,
+                    "mei": 5,
                     "may": 5,
                     "jun": 6,
+                    "juni": 6,
+                    "june": 6,
                     "jul": 7,
+                    "juli": 7,
+                    "july": 7,
                     "aug": 8,
+                    "augustus": 8,
+                    "august": 8,
                     "sep": 9,
+                    "sept": 9,
+                    "september": 9,
+                    "okt": 10,
                     "oct": 10,
+                    "oktober": 10,
+                    "october": 10,
                     "nov": 11,
+                    "november": 11,
                     "dec": 12,
+                    "december": 12,
                 }
 
                 for month_name, month_num in month_names.items():
@@ -739,7 +871,7 @@ class PDFExtractor:
         return education_list
 
     def _extract_languages(self, text: str) -> list[Language]:
-        """Extract language skills.
+        """Extract language skills with native/foreign language detection.
 
         Args:
             text: Language section text
@@ -765,22 +897,6 @@ class PDFExtractor:
             "Nederlands",
         ]
 
-        # Proficiency level mappings to CEFR
-        proficiency_map = {
-            "native": "C2",
-            "bilingual": "C2",
-            "fluent": "C1",
-            "professional": "C1",
-            "advanced": "B2",
-            "intermediate": "B1",
-            "elementary": "A2",
-            "basic": "A1",
-            "limited": "B1",
-            "full professional": "C1",
-            "professional working": "B2",
-            "limited working": "B1",
-        }
-
         # CEFR levels
         cefr_pattern = r"\b([A-C][1-2])\b"
 
@@ -793,23 +909,35 @@ class PDFExtractor:
                 if lang_pos >= 0:
                     context = text[max(0, lang_pos - 100) : lang_pos + 150]
 
-                    # Try to find CEFR level
-                    cefr_match = re.search(cefr_pattern, context)
-                    if cefr_match:
-                        level = cefr_match.group(1)
-                        language.listening = level
-                        language.reading = level
-                        language.speaking = level
-                        language.writing = level
-                    else:
-                        # Try to find proficiency description
-                        for prof_text, cefr_level in proficiency_map.items():
-                            if re.search(rf"\b{prof_text}\b", context, re.IGNORECASE):
-                                language.listening = cefr_level
-                                language.reading = cefr_level
-                                language.speaking = cefr_level
-                                language.writing = cefr_level
-                                break
+                    # Check if it's a native language
+                    is_native = False
+                    for native_keyword in ["native", "moedertaal", "mother tongue"]:
+                        if re.search(rf"\b{native_keyword}\b", context, re.IGNORECASE):
+                            language.is_native = True
+                            is_native = True
+                            break
+
+                    if not is_native:
+                        # Try to find CEFR level
+                        cefr_match = re.search(cefr_pattern, context)
+                        if cefr_match:
+                            level = cefr_match.group(1)
+                            language.listening = level
+                            language.reading = level
+                            language.speaking = level
+                            language.writing = level
+                        else:
+                            # Try to find proficiency description using class PROFICIENCY_MAP
+                            for prof_text, cefr_level in self.PROFICIENCY_MAP.items():
+                                if re.search(rf"\b{prof_text}\b", context, re.IGNORECASE):
+                                    if cefr_level == "Native":
+                                        language.is_native = True
+                                    else:
+                                        language.listening = cefr_level
+                                        language.reading = cefr_level
+                                        language.speaking = cefr_level
+                                        language.writing = cefr_level
+                                    break
 
                 languages.append(language)
 

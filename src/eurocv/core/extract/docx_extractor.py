@@ -6,6 +6,7 @@ from typing import Any
 
 from docx import Document
 
+from eurocv.core.extract.base_extractor import ResumeExtractor
 from eurocv.core.models import (
     Education,
     Language,
@@ -16,8 +17,24 @@ from eurocv.core.models import (
 )
 
 
-class DOCXExtractor:
+class DOCXExtractor(ResumeExtractor):
     """Extract text and structure from DOCX files."""
+
+    @property
+    def name(self) -> str:
+        """Return extractor name."""
+        return "DOCX"
+
+    def can_handle(self, file_path: str) -> bool:
+        """Check if this extractor can handle the file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            True if file is a DOCX file
+        """
+        return file_path.lower().endswith((".docx", ".doc"))
 
     def extract(self, file_path: str) -> Resume:
         """Extract resume data from DOCX.
