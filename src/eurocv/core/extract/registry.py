@@ -2,7 +2,6 @@
 
 import inspect
 import logging
-from typing import Type
 
 from eurocv.core.extract.base_extractor import ResumeExtractor
 from eurocv.core.extract.docx_extractor import DOCXExtractor
@@ -12,7 +11,7 @@ from eurocv.core.extract.linkedin_pdf_extractor import LinkedInPDFExtractor
 logger = logging.getLogger(__name__)
 
 # Extractor priority order (most specific first)
-EXTRACTORS: list[Type[ResumeExtractor]] = [
+EXTRACTORS: list[type[ResumeExtractor]] = [
     LinkedInPDFExtractor,  # Try LinkedIn first (more specific)
     DOCXExtractor,  # DOCX files
     GenericPDFExtractor,  # Fallback for all PDFs

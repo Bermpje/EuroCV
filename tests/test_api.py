@@ -1,8 +1,5 @@
 """Tests for FastAPI endpoints."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -54,7 +51,7 @@ trailer
 startxref
 423
 %%EOF"""
-    
+
     pdf_file = tmp_path / "test.pdf"
     pdf_file.write_bytes(pdf_content)
     return pdf_file
@@ -83,12 +80,12 @@ def test_info_endpoint(client):
     response = client.get("/info")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["service"] == "EuroCV API"
     assert "version" in data
     assert "capabilities" in data
     assert "endpoints" in data
-    
+
     # Check capabilities
     caps = data["capabilities"]
     assert "pdf" in caps["input_formats"]
@@ -125,10 +122,10 @@ def test_convert_endpoint_json_format(client, sample_pdf_file):
                 "validate": "false",
             },
         )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["success"] is True
     assert data["data"] is not None
     assert data["xml"] is None
@@ -147,10 +144,10 @@ def test_convert_endpoint_xml_format(client, sample_pdf_file):
                 "validate": "false",
             },
         )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["success"] is True
     assert data["xml"] is not None
     assert data["data"] is None
@@ -168,10 +165,10 @@ def test_convert_endpoint_both_formats(client, sample_pdf_file):
                 "validate": "false",
             },
         )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["success"] is True
     assert data["data"] is not None
     assert data["xml"] is not None
@@ -188,7 +185,7 @@ def test_convert_endpoint_invalid_format(client, sample_pdf_file):
                 "output_format": "invalid",
             },
         )
-    
+
     assert response.status_code == 400
     assert "Invalid output_format" in response.json()["detail"]
 
@@ -206,7 +203,7 @@ def test_convert_endpoint_with_options(client, sample_pdf_file):
                 "validate": "false",
             },
         )
-    
+
     assert response.status_code == 200
     assert response.json()["success"] is True
 
@@ -230,11 +227,11 @@ def test_validate_endpoint_valid_json(client):
             }
         },
     }
-    
+
     response = client.post("/validate", json={"data": valid_data})
     assert response.status_code == 200
     data = response.json()
-    
+
     assert "is_valid" in data
     assert isinstance(data["errors"], list)
 
@@ -244,11 +241,11 @@ def test_validate_endpoint_invalid_json(client):
     invalid_data = {
         "invalid": "data",
     }
-    
+
     response = client.post("/validate", json={"data": invalid_data})
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["is_valid"] is False
     assert len(data["errors"]) > 0
 
@@ -258,4 +255,3 @@ def test_404_handler(client):
     response = client.get("/nonexistent")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
-
