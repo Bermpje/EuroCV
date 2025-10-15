@@ -93,10 +93,13 @@ profile.pdf
 *.pdf
 !docs/*.pdf
 
-# Test output files
+# Test output files and PII
 profile_europass*.json
 *_test.json
 *_output.json
+lotte*.json
+*europass*.json
+!tests/fixtures/*.json
 
 # UV (modern Python package manager)
 .uv/
@@ -105,4 +108,3 @@ uv.lock
 # Python cache
 .python-version
 pyrightconfig.json
-
