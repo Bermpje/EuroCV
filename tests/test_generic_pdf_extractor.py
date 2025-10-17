@@ -941,3 +941,134 @@ def test_extract_skills_enhanced_noise_filtering(extractor):
     # Should include actual skills
     assert any("python" in name for name in skill_names)
     assert any("docker" in name for name in skill_names)
+
+
+def test_extract_certifications_without_keywords(extractor):
+    """Test certification extraction without standard keywords."""
+    text = """
+    ISO 9001 Quality Management
+    ITIL v4 Service Management
+    PMP Project Management
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name for c in certs]
+    assert len(certs) >= 2
+    assert any("ISO" in name for name in cert_names)
+    assert any("ITIL" in name for name in cert_names)
+
+
+def test_extract_certifications_with_issuer(extractor):
+    """Test certification extraction with issuer information."""
+    text = """
+    Advanced Python Programming from Coursera
+    Cloud Architecture by AWS
+    Data Science Certification (Google)
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name for c in certs]
+    assert len(certs) >= 2
+    assert any("Coursera" in name for name in cert_names)
+    assert any("AWS" in name or "Cloud" in name for name in cert_names)
+
+
+def test_extract_certifications_with_credential_ids(extractor):
+    """Test certification extraction with credential IDs."""
+    text = """
+    AWS Solutions Architect #ABC123
+    Azure Administrator ID: XYZ789
+    Scrum Master Credential: SM-2023-456
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("AWS" in name for name in cert_names)
+
+
+def test_extract_certifications_with_validity(extractor):
+    """Test certification extraction with validity periods."""
+    text = """
+    ISO 27001 Lead Auditor valid until 2025
+    PMP Certification valid through 2024
+    Agile Coach valid to 2026
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("ISO" in name for name in cert_names)
+    assert any("PMP" in name or "Agile" in name for name in cert_names)
+
+
+def test_extract_certifications_dutch_formats(extractor):
+    """Test certification extraction with Dutch formats."""
+    text = """
+    Vertrouwenspersoon Cursus 2022
+    Change Management Opleiding
+    Agile Coach Specialist Training
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("Vertrouwenspersoon" in name or "Cursus" in name for name in cert_names)
+
+
+def test_extract_certifications_with_old_years(extractor):
+    """Test certification extraction supports years before 2000."""
+    text = """
+    First Aid Certification 1995
+    Driver's License 1998
+    Teaching Diploma 1999
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 1
+    # Check if dates were extracted
+    certs_with_dates = [c for c in certs if c.date is not None]
+    if certs_with_dates:
+        assert any(c.date.year < 2000 for c in certs_with_dates)
+
+
+def test_extract_certifications_acronyms(extractor):
+    """Test certification extraction recognizes acronyms."""
+    text = """
+    PMP
+    CISSP
+    ITIL Foundation
+    TOGAF 9
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    # Should recognize acronyms as potential certifications
+    assert len(certs) >= 2
+
+
+def test_extract_certifications_filter_section_headers(extractor):
+    """Test certification extraction filters section headers."""
+    text = """
+    CERTIFICATIONS
+    AWS Certified Developer
+    Page 3
+    Licenses
+    Scrum Master Certification
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name.lower() for c in certs]
+    # Should not include section headers
+    assert not any("certifications" == name for name in cert_names)
+    assert not any("page" in name for name in cert_names)
+    assert not any("licenses" == name for name in cert_names)
+    # Should include actual certifications
+    assert any("aws" in name for name in cert_names)

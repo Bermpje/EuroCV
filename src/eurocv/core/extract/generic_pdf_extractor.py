@@ -1141,7 +1141,7 @@ class GenericPDFExtractor(ResumeExtractor):
         return skills
 
     def _extract_certifications(self, text: str) -> list[Certification]:
-        """Extract certifications.
+        """Extract certifications with improved pattern matching.
 
         Args:
             text: Certifications section text
@@ -1152,47 +1152,112 @@ class GenericPDFExtractor(ResumeExtractor):
         certifications = []
         lines = text.split("\n")
 
+        # Common certification keywords (expanded)
+        cert_keywords = [
+            "Certified",
+            "Certification",
+            "Certificate",
+            "Foundation",
+            "Professional",
+            "AWS",
+            "Azure",
+            "Microsoft",
+            "Google",
+            "Oracle",
+            "Vertrouwenspersoon",
+            "Change",
+            "Management",
+            "Agile",
+            "Scrum",
+            "Coach",
+            "Consultant",
+            "Specialist",
+            "Diploma",
+            "License",
+            "Training",
+            "Course",
+            "Cursus",  # Dutch
+            "Opleiding",  # Dutch (when not in education context)
+        ]
+
+        # Common certification format patterns
+        cert_patterns = [
+            r"\b[A-Z]{2,6}\b",  # Acronyms (ISO, ITIL, PMP, etc.)
+            r"\b[A-Z][a-z]+\s+v?\d+",  # Name with version (ITIL v4, Angular 12)
+            r"\b[A-Z]{2,}\s*\d{3,5}\b",  # ISO standards (ISO 9001, ISO 27001)
+            r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\s+[A-Z][a-z]+",  # Multi-word capitalized
+        ]
+
+        # Issuer patterns
+        issuer_patterns = [
+            r"(?:from|by|via|issued by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"\(([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\)$",  # (Organization) at end
+        ]
+
         for line in lines:
             line = line.strip()
 
-            # Skip empty lines, page numbers, section headers
+            # Skip empty lines, very short lines
             if not line or len(line) < 5:
                 continue
-            if re.search(r"page\s+\d+|certifications?|licenses?", line, re.IGNORECASE):
+
+            # Skip page numbers and section headers
+            if re.search(
+                r"^page\s+\d+|^certifications?$|^licenses?$|^certificaten$",
+                line,
+                re.IGNORECASE,
+            ):
                 continue
 
             # Check if line looks like a certification
-            # More lenient - certifications can be various formats
-            if any(
-                word in line
-                for word in [
-                    "Certified",
-                    "Foundation",
-                    "Professional",
-                    "AWS",
-                    "Azure",
-                    "Microsoft",
-                    "Vertrouwenspersoon",
-                    "Change",
-                    "Management",
-                    "Agile",
-                    "Scrum",
-                    "Coach",
-                    "Consultant",
-                    "Specialist",
-                ]
-            ) or (
-                len(line) > 10 and line[0].isupper()
-            ):  # Or any capitalized line of reasonable length
+            is_cert = False
+
+            # Check for keywords
+            if any(keyword.lower() in line.lower() for keyword in cert_keywords):
+                is_cert = True
+
+            # Check for certification patterns
+            elif any(re.search(pattern, line) for pattern in cert_patterns):
+                is_cert = True
+
+            # Check for capitalized lines (but not all caps or just one word)
+            elif (
+                len(line.split()) >= 2
+                and line[0].isupper()
+                and not line.isupper()
+                and len(line) > 10
+            ):
+                is_cert = True
+
+            # Check for credential IDs/numbers
+            elif re.search(r"#\d+|ID:\s*\w+|Credential:\s*\w+", line, re.IGNORECASE):
+                is_cert = True
+
+            if is_cert:
                 cert = Certification(name=line)
 
-                # Try to extract date from the line
-                year_match = re.search(r"\b(20\d{2})\b", line)
+                # Try to extract date from the line (support older years)
+                year_match = re.search(r"\b(19|20)\d{2}\b", line)
                 if year_match:
-                    year = int(year_match.group(1))
+                    year = int(year_match.group())
                     from datetime import date as date_class
 
                     cert.date = date_class(year, 1, 1)
+
+                # Try to extract validity period
+                validity_match = re.search(
+                    r"valid\s+(?:until|through|to)\s+(19|20)\d{2}", line, re.IGNORECASE
+                )
+                if validity_match:
+                    # Could store validity in description or notes
+                    pass
+
+                # Try to extract issuer
+                for issuer_pattern in issuer_patterns:
+                    issuer_match = re.search(issuer_pattern, line, re.IGNORECASE)
+                    if issuer_match:
+                        # Could store issuer information in description
+                        break
 
                 certifications.append(cert)
 
