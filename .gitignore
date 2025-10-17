@@ -100,6 +100,8 @@ profile_europass*.json
 lotte*.json
 *europass*.json
 !tests/fixtures/*.json
+LOTTE*.md
+*PII*.md
 
 # UV (modern Python package manager)
 .uv/
