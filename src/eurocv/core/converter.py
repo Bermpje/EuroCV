@@ -3,8 +3,7 @@
 from pathlib import Path
 from typing import Any, Literal, Union
 
-from eurocv.core.extract.docx_extractor import DOCXExtractor
-from eurocv.core.extract.pdf_extractor import PDFExtractor
+from eurocv.core.extract.registry import get_extractor
 from eurocv.core.map.europass_mapper import EuropassMapper
 from eurocv.core.models import ConversionResult, EuropassCV, Resume
 from eurocv.core.validate.schema_validator import SchemaValidator
@@ -82,7 +81,10 @@ def convert_to_europass(
 
 
 def extract_resume(file_path: str, use_ocr: bool = False) -> Resume:
-    """Extract resume data from a file.
+    """Extract resume data from a file using auto-detection.
+
+    Automatically selects the appropriate extractor based on file type
+    and content. Supports LinkedIn PDFs, generic PDFs, and DOCX files.
 
     Args:
         file_path: Path to resume file
@@ -92,20 +94,11 @@ def extract_resume(file_path: str, use_ocr: bool = False) -> Resume:
         Resume object
 
     Raises:
-        ValueError: If file format is unsupported
+        ValueError: If file format is unsupported or no suitable extractor found
     """
-    path = Path(file_path)
-    suffix = path.suffix.lower()
-
-    extractor: Union[PDFExtractor, DOCXExtractor]
-    if suffix == ".pdf":
-        extractor = PDFExtractor(use_ocr=use_ocr)
-        return extractor.extract(str(path))
-    elif suffix in [".docx", ".doc"]:
-        extractor = DOCXExtractor()
-        return extractor.extract(str(path))
-    else:
-        raise ValueError(f"Unsupported file format: {suffix}")
+    # Use registry for auto-detection
+    extractor = get_extractor(file_path, use_ocr=use_ocr)
+    return extractor.extract(file_path)
 
 
 def map_to_europass(

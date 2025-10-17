@@ -6,6 +6,7 @@ from typing import Any
 
 from docx import Document
 
+from eurocv.core.extract.base_extractor import ResumeExtractor
 from eurocv.core.models import (
     Education,
     Language,
@@ -16,8 +17,24 @@ from eurocv.core.models import (
 )
 
 
-class DOCXExtractor:
+class DOCXExtractor(ResumeExtractor):
     """Extract text and structure from DOCX files."""
+
+    @property
+    def name(self) -> str:
+        """Return extractor name."""
+        return "DOCX"
+
+    def can_handle(self, file_path: str) -> bool:
+        """Check if this extractor can handle the file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            True if file is a DOCX file
+        """
+        return file_path.lower().endswith((".docx", ".doc"))
 
     def extract(self, file_path: str) -> Resume:
         """Extract resume data from DOCX.
@@ -139,9 +156,7 @@ class DOCXExtractor:
             info.email = email_matches[0]
 
         # Extract phone
-        phone_pattern = (
-            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        )
+        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
         phone_matches = re.findall(phone_pattern, text[:500])
         if phone_matches:
             info.phone = phone_matches[0]
@@ -187,7 +202,9 @@ class DOCXExtractor:
                 end = len(text)
 
             content = text[start:end].strip()
-            content = re.sub(f"^{re.escape(header)}", "", content, flags=re.IGNORECASE).strip()
+            content = re.sub(
+                f"^{re.escape(header)}", "", content, flags=re.IGNORECASE
+            ).strip()
             sections[key] = content
 
         return sections
@@ -237,7 +254,9 @@ class DOCXExtractor:
                 language = Language(language=lang)
 
                 context = text[
-                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(lang.lower())
+                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(
+                        lang.lower()
+                    )
                     + 100
                 ]
                 cefr_match = re.search(cefr_pattern, context)

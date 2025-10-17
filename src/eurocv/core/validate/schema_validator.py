@@ -38,7 +38,9 @@ class SchemaValidator:
 
             # Validate identification if present
             if "Identification" in learner_info:
-                id_errors = self._validate_identification(learner_info["Identification"])
+                id_errors = self._validate_identification(
+                    learner_info["Identification"]
+                )
                 errors.extend(id_errors)
 
             # Validate work experience if present
@@ -73,7 +75,9 @@ class SchemaValidator:
             if not isinstance(person_name, dict):
                 errors.append("Identification.PersonName must be a dictionary")
             elif "Surname" not in person_name and "FirstName" not in person_name:
-                errors.append("Identification.PersonName must have at least FirstName or Surname")
+                errors.append(
+                    "Identification.PersonName must have at least FirstName or Surname"
+                )
 
         # ContactInfo validation
         if "ContactInfo" in identification:
@@ -83,7 +87,9 @@ class SchemaValidator:
 
         return errors
 
-    def _validate_work_experience(self, experience: dict[str, Any], index: int) -> list[str]:
+    def _validate_work_experience(
+        self, experience: dict[str, Any], index: int
+    ) -> list[str]:
         """Validate work experience entry.
 
         Args:
@@ -207,7 +213,9 @@ def convert_to_xml(data: dict[str, Any]) -> str:
             _dict_to_xml(data["LearnerInfo"], learner_info)
 
         # Pretty print
-        xml_string = etree.tostring(root, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+        xml_string = etree.tostring(
+            root, pretty_print=True, xml_declaration=True, encoding="UTF-8"
+        )
         return xml_string.decode("utf-8")
 
     except ImportError:

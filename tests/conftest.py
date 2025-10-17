@@ -1,7 +1,6 @@
 """Pytest configuration and fixtures."""
 
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture
@@ -25,4 +24,3 @@ def output_dir(tmp_path):
     out_dir = tmp_path / "output"
     out_dir.mkdir()
     return out_dir
-

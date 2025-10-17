@@ -93,10 +93,48 @@ profile.pdf
 *.pdf
 !docs/*.pdf
 
-# Test output files
+# Test output files and PII
 profile_europass*.json
 *_test.json
 *_output.json
+*_final.json
+*_improved.json
+*_analysis.json
+*_refined.json
+*_result.json
+lotte*.json
+*europass*.json
+!tests/fixtures/*.json
+!examples/*.json
+LOTTE*.md
+*PII*.md
+*_ANALYSIS.md
+*_STATUS.md
+*_RESULTS.md
+*_TEST*.md
+*_IMPROVEMENTS.md
+CONVERSION_*.md
+IMPROVEMENT_*.md
+IMPROVEMENTS_*.md
+EXTRACTION_*.md
+COMPLETED_*.md
+FINAL_*.md
+
+# Output XML files (except schemas/examples in docs)
+*_output.xml
+*_test.xml
+*_final.xml
+*europass*.xml
+!docs/**/*.xml
+!tests/fixtures/**/*.xml
+
+# Output directories
+output/
+outputs/
+results/
+conversions/
+temp/
+tmp/
 
 # UV (modern Python package manager)
 .uv/
@@ -105,4 +143,5 @@ uv.lock
 # Python cache
 .python-version
 pyrightconfig.json
-
+pdf_content.txt
+dutch_cv_sample.pdf

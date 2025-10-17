@@ -146,11 +146,15 @@ async def convert(
         # Build response
         if output_format == "json":
             if isinstance(result, dict):
-                return ConvertResponse(success=True, data=result, message="Conversion successful")
+                return ConvertResponse(
+                    success=True, data=result, message="Conversion successful"
+                )
             raise HTTPException(status_code=500, detail="Expected dict for JSON output")
         elif output_format == "xml":
             if isinstance(result, str):
-                return ConvertResponse(success=True, xml=result, message="Conversion successful")
+                return ConvertResponse(
+                    success=True, xml=result, message="Conversion successful"
+                )
             raise HTTPException(status_code=500, detail="Expected str for XML output")
         else:  # both
             if isinstance(result, ConversionResult):
@@ -161,7 +165,9 @@ async def convert(
                     validation_errors=result.validation_errors,
                     message="Conversion successful",
                 )
-            raise HTTPException(status_code=500, detail="Expected ConversionResult for both output")
+            raise HTTPException(
+                status_code=500, detail="Expected ConversionResult for both output"
+            )
 
     except Exception as e:
         # Clean up temp file on error

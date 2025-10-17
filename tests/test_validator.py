@@ -1,6 +1,7 @@
 """Tests for schema validator."""
 
 import pytest
+
 from eurocv.core.validate.schema_validator import SchemaValidator, convert_to_xml
 
 
@@ -12,16 +13,9 @@ def valid_europass_json():
             "DocumentType": "Europass CV",
             "CreationDate": "2024-01-01T00:00:00",
             "Generator": "EuroCV",
-            "XSDVersion": "V3.3"
+            "XSDVersion": "V3.3",
         },
-        "LearnerInfo": {
-            "Identification": {
-                "PersonName": {
-                    "FirstName": "John",
-                    "Surname": "Doe"
-                }
-            }
-        }
+        "LearnerInfo": {"Identification": {"PersonName": {"FirstName": "John", "Surname": "Doe"}}},
     }
 
 
@@ -35,7 +29,7 @@ def test_validate_valid_json(valid_europass_json):
     """Test validation of valid JSON."""
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(valid_europass_json)
-    
+
     assert is_valid
     assert len(errors) == 0
 
@@ -43,10 +37,10 @@ def test_validate_valid_json(valid_europass_json):
 def test_validate_missing_document_info():
     """Test validation with missing DocumentInfo."""
     data = {"LearnerInfo": {}}
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     assert not is_valid
     assert any("DocumentInfo" in error for error in errors)
 
@@ -54,10 +48,10 @@ def test_validate_missing_document_info():
 def test_validate_missing_learner_info():
     """Test validation with missing LearnerInfo."""
     data = {"DocumentInfo": {}}
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     assert not is_valid
     assert any("LearnerInfo" in error for error in errors)
 
@@ -66,29 +60,21 @@ def test_validate_invalid_person_name():
     """Test validation with invalid PersonName."""
     data = {
         "DocumentInfo": {},
-        "LearnerInfo": {
-            "Identification": {
-                "PersonName": "Invalid"  # Should be dict, not string
-            }
-        }
+        "LearnerInfo": {"Identification": {"PersonName": "Invalid"}},  # Should be dict, not string
     }
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     assert not is_valid
 
 
 def test_convert_to_xml_basic():
     """Test basic XML conversion."""
-    data = {
-        "DocumentInfo": {
-            "DocumentType": "Europass CV"
-        }
-    }
-    
+    data = {"DocumentInfo": {"DocumentType": "Europass CV"}}
+
     xml_string = convert_to_xml(data)
-    
+
     assert xml_string is not None
     assert isinstance(xml_string, str)
     assert "Europass" in xml_string
@@ -98,21 +84,12 @@ def test_convert_to_xml_basic():
 def test_convert_to_xml_with_nested_data():
     """Test XML conversion with nested data."""
     data = {
-        "DocumentInfo": {
-            "DocumentType": "Europass CV",
-            "CreationDate": "2024-01-01"
-        },
-        "LearnerInfo": {
-            "Identification": {
-                "PersonName": {
-                    "FirstName": "John"
-                }
-            }
-        }
+        "DocumentInfo": {"DocumentType": "Europass CV", "CreationDate": "2024-01-01"},
+        "LearnerInfo": {"Identification": {"PersonName": {"FirstName": "John"}}},
     }
-    
+
     xml_string = convert_to_xml(data)
-    
+
     assert "FirstName" in xml_string
     assert "John" in xml_string
 
@@ -121,9 +98,9 @@ def test_validate_xml_invalid_syntax():
     """Test XML validation with invalid syntax."""
     validator = SchemaValidator()
     xml_string = "<Invalid><XML"
-    
+
     is_valid, errors = validator.validate_xml(xml_string)
-    
+
     assert not is_valid
     assert len(errors) > 0
 
@@ -137,7 +114,7 @@ def test_validate_xml_valid():
         <DocumentType>Europass CV</DocumentType>
     </DocumentInfo>
 </root>"""
-    
+
     is_valid, errors = validator.validate_xml(xml_string)
     # May or may not be schema-valid, but should parse
     assert isinstance(is_valid, bool)
@@ -148,7 +125,7 @@ def test_validate_json_empty():
     """Test validation with empty JSON."""
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json({})
-    
+
     assert not is_valid
     assert len(errors) > 0
 
@@ -157,10 +134,10 @@ def test_validate_json_with_extra_fields(valid_europass_json):
     """Test validation with extra fields."""
     data = valid_europass_json.copy()
     data["ExtraField"] = "Should be ignored or cause warning"
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     # Should still be valid or have warnings
     assert isinstance(is_valid, bool)
     assert isinstance(errors, list)
@@ -168,28 +145,20 @@ def test_validate_json_with_extra_fields(valid_europass_json):
 
 def test_convert_to_xml_with_lists():
     """Test XML conversion with list data."""
-    data = {
-        "DocumentInfo": {
-            "Items": ["Item1", "Item2", "Item3"]
-        }
-    }
-    
+    data = {"DocumentInfo": {"Items": ["Item1", "Item2", "Item3"]}}
+
     xml_string = convert_to_xml(data)
-    
+
     assert "Item1" in xml_string or "Items" in xml_string
     assert isinstance(xml_string, str)
 
 
 def test_convert_to_xml_with_special_chars():
     """Test XML conversion with special characters."""
-    data = {
-        "DocumentInfo": {
-            "Description": "Test & <special> \"chars\""
-        }
-    }
-    
+    data = {"DocumentInfo": {"Description": 'Test & <special> "chars"'}}
+
     xml_string = convert_to_xml(data)
-    
+
     # Should escape special XML characters
     assert isinstance(xml_string, str)
     assert len(xml_string) > 0
@@ -198,9 +167,9 @@ def test_convert_to_xml_with_special_chars():
 def test_validator_with_none():
     """Test validator with None input."""
     validator = SchemaValidator()
-    
+
     is_valid, errors = validator.validate_json(None)  # type: ignore
-    
+
     assert not is_valid
     assert len(errors) > 0
 
@@ -208,7 +177,7 @@ def test_validator_with_none():
 def test_convert_to_xml_empty_dict():
     """Test XML conversion with empty dict."""
     xml_string = convert_to_xml({})
-    
+
     assert isinstance(xml_string, str)
     assert len(xml_string) > 0
 
@@ -222,15 +191,15 @@ def test_validate_work_experience():
                 {
                     "Position": {"Label": "Developer"},
                     "Employer": {"Name": "Company Inc"},
-                    "Period": {"From": "2020-01-01"}
+                    "Period": {"From": "2020-01-01"},
                 }
             ]
-        }
+        },
     }
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     # May have some errors, but should not crash
     assert isinstance(is_valid, bool)
     assert isinstance(errors, list)
@@ -245,15 +214,15 @@ def test_validate_education():
                 {
                     "Title": "Bachelor of Science",
                     "Organisation": {"Name": "University"},
-                    "Level": {"Code": "6"}
+                    "Level": {"Code": "6"},
                 }
             ]
-        }
+        },
     }
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     # May have some errors, but should not crash
     assert isinstance(is_valid, bool)
     assert isinstance(errors, list)
@@ -269,18 +238,17 @@ def test_validate_skills():
                     "ForeignLanguage": [
                         {
                             "Description": {"Code": "en"},
-                            "ProficiencyLevel": {"Listening": "C1"}
+                            "ProficiencyLevel": {"Listening": "C1"},
                         }
                     ]
                 }
             }
-        }
+        },
     }
-    
+
     validator = SchemaValidator()
     is_valid, errors = validator.validate_json(data)
-    
+
     # May have some errors, but should not crash
     assert isinstance(is_valid, bool)
     assert isinstance(errors, list)
-

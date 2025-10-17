@@ -1,0 +1,39 @@
+# EuroCV Project Rules
+
+## Git & Version Control
+
+1. **NEVER commit with `--no-verify`**: Always run pre-commit hooks. If hooks fail:
+   - Fix the issues properly
+   - Don't bypass hooks to "save time"
+   - If formatters conflict, fix the underlying configuration issue
+   - Pre-commit hooks exist for a reason - respect them
+
+2. **Git Feature Branching per Story**: Create a dedicated Git feature branch for each Story. The branch name must reference the Jira story key (e.g., `feature/fv-56`). All work for the story must be done on this branch.
+
+3. **Atomic, Linked Commits**: Each Jira "Task" must correspond to a single, atomic Git commit. The commit message must be standardized with the Jira task key for traceability (e.g., `feat(ui): [FV-58] ...`).
+
+4. **Never force push to main/master**: Force pushes to protected branches can destroy work. Only force push to feature branches when absolutely necessary.
+
+5. **GitLab is used as repository**: Unless otherwise specified.
+
+## Development Workflow
+
+1. **Jira-First, Task-Driven Development**: All work must start in Jira with a Story that is broken down into specific "Task" tickets. Do not write code without a corresponding ticket.
+
+2. **Synchronized Status Management with Review Gates**: Move a Jira ticket to "In Progress" right before starting work. After the commit is made, move the ticket to "Review". Only move the ticket to "Done" after explicit approval.
+
+3. **Merge Request Hand-off**: Once all tasks for a story are approved, push the feature branch to the remote repository and create a Merge Request (MR) for review. Do not merge the branch yourself.
+
+4. **Structured Issue & Scope Management**: Any bugs or unexpected issues must be tracked by creating a new "Bug" ticket in Jira. New areas of work should be planned via new "Epic" and "Story" tickets.
+
+## Code Quality
+
+1. **Use `uv` for Python package management**: Always use `uv` commands for installing packages and managing dependencies.
+
+2. **Use ruff for linting and formatting**: We use `ruff check` for linting and `ruff format` for formatting. Black has been removed to avoid conflicts.
+
+3. **Run all checks before committing**: Ensure ruff (lint + format), mypy, and tests all pass before committing. Pre-commit hooks will enforce this.
+
+4. **Test before pushing**: Run the test suite locally to catch issues early.
+
+5. **Type hints**: Use proper type hints throughout the codebase. Fix mypy errors, don't ignore them.
