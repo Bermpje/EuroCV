@@ -813,17 +813,76 @@ class GenericPDFExtractor(ResumeExtractor):
                     else:
                         exp.end_date = self._parse_date(end_date_str)
 
-                    # Extract position and employer from text before dates
+                    # B6: Extract position and employer from text before dates
+                    # Handle Dutch patterns like "bij Company" (at Company), "voor Company" (for Company)
+                    # Also handle job title patterns like "Senior Developer", "Lead Engineer"
+
                     # The before_text might contain description from previous entry, so extract last 2-3 lines
                     lines_before = [
                         line.strip() for line in before_text.split("\n") if line.strip()
                     ]
+
                     # Take the last 1-2 non-empty lines as position/company (they're right before the date)
                     if lines_before:
                         if len(lines_before) >= 2:
                             # Last line is likely company, second-to-last is position
-                            exp.position = lines_before[-2]
-                            exp.employer = lines_before[-1]
+                            potential_position = lines_before[-2]
+                            potential_company = lines_before[-1]
+
+                            # B6: Handle "bij Company" or "voor Company" patterns
+                            bij_match = re.search(
+                                r"(bij|voor|at)\s+(.+)",
+                                potential_company,
+                                re.IGNORECASE,
+                            )
+                            if bij_match:
+                                # Company is after "bij" or "voor"
+                                exp.employer = bij_match.group(2).strip()
+                                exp.position = potential_position
+                            else:
+                                # Standard pattern
+                                exp.position = potential_position
+                                exp.employer = potential_company
+
+                            # B6: Detect job title patterns and enhance position
+                            seniority_levels = [
+                                "Senior",
+                                "Junior",
+                                "Lead",
+                                "Principal",
+                                "Staff",
+                                "Associate",
+                                "Head of",
+                                "Chief",
+                                "Director of",
+                                "Medior",
+                                "Intern",
+                                "Trainee",
+                            ]
+                            # Note: Could be used for future enhancements
+                            _ = any(
+                                level.lower() in exp.position.lower()
+                                for level in seniority_levels
+                            )
+
+                            # B6: Detect contractor/freelance indicators
+                            contractor_keywords = [
+                                "Freelance",
+                                "Contractor",
+                                "Consultant",
+                                "Zelfstandig",
+                                "Zzp",
+                                "ZZP",
+                            ]
+                            is_contractor = any(
+                                kw.lower() in exp.position.lower()
+                                or (exp.employer and kw.lower() in exp.employer.lower())
+                                for kw in contractor_keywords
+                            )
+                            if is_contractor and exp.description:
+                                exp.description = (
+                                    f"Contractor/Freelance\n{exp.description}"
+                                )
                         else:
                             exp.position = lines_before[-1]
 
@@ -940,7 +999,7 @@ class GenericPDFExtractor(ResumeExtractor):
         return None
 
     def _extract_education(self, text: str) -> list[Education]:
-        """Extract education entries with improved multi-degree support.
+        """Extract education entries with improved multi-degree support (B5: Enhanced).
 
         Args:
             text: Education section text
@@ -956,6 +1015,23 @@ class GenericPDFExtractor(ResumeExtractor):
         current_entry = []
         current_edu = None
 
+        # B5: Enhanced degree patterns
+        degree_patterns = [
+            # Full degree patterns with field
+            r"(Bachelor|Master|Doctor|PhD|Doctorate)\s+(?:of\s+)?(?:Science|Arts|Engineering|Business|Laws)?\s+(?:in\s+)?(.+)",
+            r"(BSc|MSc|MBA|PhD|MA|BA|BEng|MEng|LLB|LLM)\s+(?:in\s+)?(.+)?",
+            # Dutch degrees
+            r"(HBO|WO|MBO|Doctoraal)\s+(.+)",
+        ]
+
+        # B5: Grade patterns
+        grade_patterns = [
+            r"(cum laude|summa cum laude|magna cum laude)",
+            r"(?:with|met)\s+(honors?|onderscheiding)",
+            r"GPA[:\s]*([\d\.]+)",
+            r"(?:Grade|Cijfer)[:\s]*([\d\.]+)",
+        ]
+
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
@@ -964,15 +1040,27 @@ class GenericPDFExtractor(ResumeExtractor):
             # Check for date range (likely marks new entry boundary)
             date_match = re.search(r"(\d{4})\s*[-–—]\s*(\d{4})", line_stripped)
 
-            if date_match:
+            # B5: Also check for "afgestudeerd in" (graduated in) patterns
+            graduated_match = re.search(
+                r"(?:afgestudeerd|graduated)(?:\s+in)?\s+(\d{4})",
+                line_stripped,
+                re.IGNORECASE,
+            )
+
+            if date_match or graduated_match:
                 # Save previous entry if exists
                 if current_edu:
                     education_list.append(current_edu)
 
                 # Start new entry
                 current_edu = Education()
-                start_year = int(date_match.group(1))
-                end_year = int(date_match.group(2))
+                if date_match:
+                    start_year = int(date_match.group(1))
+                    end_year = int(date_match.group(2))
+                elif graduated_match:
+                    end_year = int(graduated_match.group(1))
+                    start_year = end_year - 4  # Assume 4-year program
+
                 from datetime import date as date_class
 
                 current_edu.start_date = date_class(start_year, 9, 1)
@@ -983,6 +1071,16 @@ class GenericPDFExtractor(ResumeExtractor):
             if current_edu:
                 current_entry.append(line_stripped)
 
+                # B5: Extract grades/honors
+                if not current_edu.description:
+                    for grade_pattern in grade_patterns:
+                        grade_match = re.search(
+                            grade_pattern, line_stripped, re.IGNORECASE
+                        )
+                        if grade_match:
+                            current_edu.description = grade_match.group(0)
+                            break
+
                 # Check for organization (university keyword)
                 if not current_edu.organization and any(
                     keyword in line_stripped.lower()
@@ -992,28 +1090,56 @@ class GenericPDFExtractor(ResumeExtractor):
                         "hogeschool",
                         "college",
                         "school",
+                        "instituut",
+                        "institute",
                     ]
                 ):
                     current_edu.organization = line_stripped
 
-                # Check for degree title (uppercase words, degree keywords)
+                # B5: Enhanced degree/field parsing
                 elif not current_edu.title:
-                    degree_keywords = [
-                        "bachelor",
-                        "master",
-                        "phd",
-                        "msc",
-                        "bsc",
-                        "hbo",
-                        "wo",
-                        "sociologie",
-                        "hrm",
-                    ]
-                    if (
-                        any(kw in line_stripped.lower() for kw in degree_keywords)
-                        or line_stripped.isupper()
-                    ):
-                        current_edu.title = line_stripped
+                    # Try structured degree patterns first
+                    for pattern in degree_patterns:
+                        deg_match = re.search(pattern, line_stripped, re.IGNORECASE)
+                        if deg_match:
+                            if (
+                                deg_match.lastindex
+                                and deg_match.lastindex >= 2
+                                and deg_match.group(2)
+                            ):
+                                # Has field of study - combine into title
+                                current_edu.title = f"{deg_match.group(1)} in {deg_match.group(2).strip()}"
+                            else:
+                                # Just degree
+                                current_edu.title = deg_match.group(1)
+                            break
+
+                    # Fallback: check for basic degree keywords
+                    if not current_edu.title:
+                        degree_keywords = [
+                            "bachelor",
+                            "master",
+                            "phd",
+                            "doctorate",
+                            "msc",
+                            "bsc",
+                            "mba",
+                            "ma",
+                            "ba",
+                            "hbo",
+                            "wo",
+                            "mbo",
+                            "doctoraal",
+                            "sociologie",
+                            "hrm",
+                            "informatica",
+                            "computer science",
+                        ]
+                        if (
+                            any(kw in line_stripped.lower() for kw in degree_keywords)
+                            or line_stripped.isupper()
+                        ):
+                            current_edu.title = line_stripped
 
         # Don't forget last entry
         if current_edu:
@@ -1026,7 +1152,7 @@ class GenericPDFExtractor(ResumeExtractor):
         )
 
     def _extract_languages(self, text: str) -> list[Language]:
-        """Extract language skills with native/foreign language detection.
+        """Extract language skills with native/foreign language detection (B7: Enhanced).
 
         Args:
             text: Language section text
@@ -1055,6 +1181,36 @@ class GenericPDFExtractor(ResumeExtractor):
         # CEFR levels
         cefr_pattern = r"\b([A-C][1-2])\b"
 
+        # B7: Enhanced proficiency inference keywords
+        proficiency_levels = {
+            # Native/bilingual
+            "native": "C2",
+            "moedertaal": "C2",
+            "mother tongue": "C2",
+            "bilingual": "C2",
+            "tweetalig": "C2",
+            # Fluent
+            "fluent": "C2",
+            "vloeiend": "C2",
+            "excellent": "C2",
+            "uitstekend": "C2",
+            # Advanced
+            "advanced": "C1",
+            "gevorderd": "C1",
+            "proficient": "C1",
+            # Intermediate
+            "intermediate": "B1",
+            "good": "B1",
+            "goed": "B1",
+            "conversational": "B1",
+            # Basic
+            "basic": "A2",
+            "elementary": "A2",
+            "beginner": "A1",
+            "limited": "A2",
+            "beperkt": "A2",
+        }
+
         for lang in language_names:
             if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
                 language = Language(language=lang)
@@ -1064,11 +1220,22 @@ class GenericPDFExtractor(ResumeExtractor):
                 if lang_pos >= 0:
                     context = text[max(0, lang_pos - 100) : lang_pos + 150]
 
-                    # Check if it's a native language
+                    # B7: Check if it's a native language first
                     is_native = False
-                    for native_keyword in ["native", "moedertaal", "mother tongue"]:
+                    native_keywords = [
+                        "native",
+                        "moedertaal",
+                        "mother tongue",
+                        "bilingual",
+                        "tweetalig",
+                    ]
+                    for native_keyword in native_keywords:
                         if re.search(rf"\b{native_keyword}\b", context, re.IGNORECASE):
                             language.is_native = True
+                            language.listening = "C2"
+                            language.reading = "C2"
+                            language.speaking = "C2"
+                            language.writing = "C2"
                             is_native = True
                             break
 
@@ -1082,21 +1249,37 @@ class GenericPDFExtractor(ResumeExtractor):
                             language.speaking = level
                             language.writing = level
                         else:
-                            # Check proficiency keywords more carefully
+                            # B7: Enhanced proficiency keyword matching
                             # Look for keywords within 50 chars of language name
                             context_near = text[max(0, lang_pos - 50) : lang_pos + 50]
-                            for prof_text, cefr_level in self.PROFICIENCY_MAP.items():
+                            found_level = False
+
+                            for prof_keyword, cefr_level in proficiency_levels.items():
                                 if re.search(
-                                    rf"\b{prof_text}\b", context_near, re.IGNORECASE
+                                    rf"\b{prof_keyword}\b", context_near, re.IGNORECASE
                                 ):
-                                    if cefr_level == "Native":
+                                    if prof_keyword in [
+                                        "native",
+                                        "moedertaal",
+                                        "mother tongue",
+                                        "bilingual",
+                                        "tweetalig",
+                                    ]:
                                         language.is_native = True
-                                    else:
-                                        language.listening = cefr_level
-                                        language.reading = cefr_level
-                                        language.speaking = cefr_level
-                                        language.writing = cefr_level
+                                    language.listening = cefr_level
+                                    language.reading = cefr_level
+                                    language.speaking = cefr_level
+                                    language.writing = cefr_level
+                                    found_level = True
                                     break
+
+                            # B7: Fallback - if no level found, assign default based on context
+                            if not found_level:
+                                # If it's listed without level, assume intermediate (B1)
+                                language.listening = "B1"
+                                language.reading = "B1"
+                                language.speaking = "B1"
+                                language.writing = "B1"
 
                 languages.append(language)
 
