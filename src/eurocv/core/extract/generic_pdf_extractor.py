@@ -166,37 +166,35 @@ class GenericPDFExtractor(ResumeExtractor):
         Returns:
             Tuple of (text content, metadata dict)
         """
-        doc = fitz.open(file_path)
-        text_parts = []
-        metadata = {
-            "page_count": len(doc),
-            "format": "PDF",
-            "extractor": "pymupdf",
-        }
+        with fitz.open(file_path) as doc:
+            text_parts = []
+            metadata = {
+                "page_count": len(doc),
+                "format": "PDF",
+                "extractor": "pymupdf",
+            }
 
-        # Extract metadata
-        if doc.metadata:
-            metadata.update(
-                {
-                    "title": doc.metadata.get("title"),
-                    "author": doc.metadata.get("author"),
-                    "subject": doc.metadata.get("subject"),
-                    "keywords": doc.metadata.get("keywords"),
-                }
-            )
+            # Extract metadata
+            if doc.metadata:
+                metadata.update(
+                    {
+                        "title": doc.metadata.get("title"),
+                        "author": doc.metadata.get("author"),
+                        "subject": doc.metadata.get("subject"),
+                        "keywords": doc.metadata.get("keywords"),
+                    }
+                )
 
-        # Extract text from each page
-        for page_num, page in enumerate(doc, 1):
-            # Check if page is likely scanned (no text)
-            page_text = page.get_text()
+            # Extract text from each page
+            for page_num, page in enumerate(doc, 1):
+                # Check if page is likely scanned (no text)
+                page_text = page.get_text()
 
-            if not page_text.strip() and self.use_ocr:
-                # Use OCR for scanned pages
-                page_text = self._ocr_page(page)
+                if not page_text.strip() and self.use_ocr:
+                    # Use OCR for scanned pages
+                    page_text = self._ocr_page(page)
 
-            text_parts.append(page_text)
-
-        doc.close()
+                text_parts.append(page_text)
 
         return "\n\n".join(text_parts), metadata
 
