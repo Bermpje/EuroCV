@@ -110,3 +110,5 @@ uv.lock
 # Python cache
 .python-version
 pyrightconfig.json
+pdf_content.txt
+dutch_cv_sample.pdf

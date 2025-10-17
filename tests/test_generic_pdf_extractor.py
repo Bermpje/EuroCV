@@ -235,14 +235,14 @@ def test_extract_work_experience_dutch_dates(extractor):
 
 
 @pytest.mark.skipif(
-    not Path("CV Sample Person_0825NL .pdf").exists(), reason="Dutch CV sample not available"
+    not Path("dutch_cv_sample.pdf").exists(), reason="Dutch CV sample not available"
 )
 def test_extract_dutch_cv_real(extractor):
-    """Test extraction of real Dutch CV (Sample Person).
+    """Test extraction of real Dutch CV sample.
 
     This test only runs if the CV file is present.
     """
-    resume = extractor.extract("CV Sample Person_0825NL .pdf")
+    resume = extractor.extract("dutch_cv_sample.pdf")
 
     # Verify basic extraction
     assert isinstance(resume, Resume)
