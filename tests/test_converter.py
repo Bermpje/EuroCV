@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from eurocv.core.converter import convert_to_europass, extract_resume, map_to_europass
-from eurocv.core.models import PersonalInfo, Resume
+from eurocv.core.models import ConversionResult, PersonalInfo, Resume
 
 
 def test_extract_resume_unsupported_format():
@@ -138,3 +138,135 @@ def test_convert_to_europass_file_not_found():
     """Test conversion with non-existent file."""
     with pytest.raises(FileNotFoundError):
         convert_to_europass("nonexistent.pdf")
+
+
+@patch("eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.extract")
+@patch("eurocv.core.validate.schema_validator.SchemaValidator.validate_json")
+@patch("pathlib.Path.exists", return_value=True)
+def test_convert_to_europass_with_validation_errors(
+    mock_exists, mock_validate_json, mock_extract
+):
+    """Test conversion with validation errors."""
+    from eurocv.core.models import PersonalInfo
+
+    mock_extract.return_value = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+    mock_validate_json.return_value = (
+        False,
+        ["Validation error 1", "Validation error 2"],
+    )
+
+    result = convert_to_europass("test.pdf", output_format="both", validate=True)
+
+    # Should return result with validation errors
+    assert isinstance(result, ConversionResult)
+    assert len(result.validation_errors) > 0
+
+
+@patch("eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.extract")
+@patch("eurocv.core.validate.schema_validator.SchemaValidator.validate_xml")
+@patch("pathlib.Path.exists", return_value=True)
+def test_convert_to_europass_xml_validation_errors(
+    mock_exists, mock_validate_xml, mock_extract
+):
+    """Test conversion with XML validation errors."""
+    from eurocv.core.models import PersonalInfo
+
+    mock_extract.return_value = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+    mock_validate_xml.return_value = (False, ["XML validation error"])
+
+    result = convert_to_europass("test.pdf", output_format="xml", validate=True)
+
+    # Should still return XML even with validation errors
+    assert isinstance(result, str)
+
+
+def test_validate_europass_json():
+    """Test validate_europass with JSON data."""
+    from eurocv.core.converter import validate_europass
+
+    # Simple valid structure
+    data = {"DocumentInfo": {}, "LearnerInfo": {}}
+
+    is_valid, errors = validate_europass(data)
+
+    # Should attempt validation (may or may not be valid depending on schema)
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_validate_europass_xml():
+    """Test validate_europass with XML data."""
+    from eurocv.core.converter import validate_europass
+
+    # Simple XML string
+    xml_data = '<?xml version="1.0"?><root></root>'
+
+    is_valid, errors = validate_europass(xml_data)
+
+    # Should attempt validation
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_validate_europass_invalid_type():
+    """Test validate_europass with invalid data type."""
+    from eurocv.core.converter import validate_europass
+
+    # Invalid data type (not dict or str)
+    is_valid, errors = validate_europass([1, 2, 3])
+
+    # Should return False with error message
+    assert is_valid is False
+    assert len(errors) > 0
+    assert "Invalid data type" in errors[0]
+
+
+@patch("eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.extract")
+@patch("pathlib.Path.exists", return_value=True)
+def test_convert_to_europass_both_format(mock_exists, mock_extract):
+    """Test conversion with 'both' output format."""
+    from eurocv.core.models import PersonalInfo
+
+    mock_extract.return_value = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+
+    result = convert_to_europass("test.pdf", output_format="both", validate=False)
+
+    # Should return ConversionResult with both json and xml
+    assert isinstance(result, ConversionResult)
+    assert result.json_data is not None
+    assert result.xml_data is not None
+
+
+@patch("eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.extract")
+@patch("pathlib.Path.exists", return_value=True)
+def test_convert_to_europass_xml_only(mock_exists, mock_extract):
+    """Test conversion with 'xml' output format."""
+    from eurocv.core.models import PersonalInfo
+
+    mock_extract.return_value = Resume(
+        personal_info=PersonalInfo(first_name="Test", last_name="User")
+    )
+
+    result = convert_to_europass("test.pdf", output_format="xml", validate=False)
+
+    # Should return XML string
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+@patch("eurocv.core.extract.generic_pdf_extractor.GenericPDFExtractor.extract")
+@patch("pathlib.Path.exists", return_value=True)
+def test_extract_resume_with_ocr(mock_exists, mock_extract):
+    """Test extract_resume with OCR enabled."""
+    mock_extract.return_value = Resume()
+
+    resume = extract_resume("test.pdf", use_ocr=True)
+
+    # Should extract and return Resume
+    assert isinstance(resume, Resume)
