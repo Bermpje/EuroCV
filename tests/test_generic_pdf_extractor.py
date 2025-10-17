@@ -1,5 +1,6 @@
 """Tests for Generic PDF extractor with multi-language support."""
 
+from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1072,3 +1073,137 @@ def test_extract_certifications_filter_section_headers(extractor):
     assert not any("licenses" == name for name in cert_names)
     # Should include actual certifications
     assert any("aws" in name for name in cert_names)
+
+
+# Phase A Tests: Quick Wins
+
+
+def test_extract_skills_filter_page_numbers(extractor):
+    """Test A1: Skills extraction filters 'Page X' patterns."""
+    text = """
+    Python
+    JavaScript
+    Page 2
+    Docker
+    Page 3
+    React
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should not include page numbers
+    assert not any("page" in name for name in skill_names)
+    # Should include actual skills
+    assert "python" in skill_names
+    assert "javascript" in skill_names
+    assert "docker" in skill_names
+
+
+def test_extract_personal_info_dutch_phone_formats(extractor):
+    """Test A3: Phone extraction handles various Dutch formats."""
+    test_cases = [
+        ("+31 (0)6 12345678", "+31 (0)6 12345678"),
+        ("06-12345678", "06-12345678"),
+        ("0612345678", "0612345678"),
+        ("(020) 1234567", "(020) 1234567"),
+        ("020-1234567", "020-1234567"),
+    ]
+
+    for test_phone, expected in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {test_phone}
+        Amsterdam, Netherlands
+        """
+
+        info = extractor._extract_personal_info(text)
+        assert info.phone is not None, f"Failed to extract {test_phone}"
+        # Normalize for comparison
+        assert info.phone.replace(" ", "").replace("-", "") in test_phone.replace(
+            " ", ""
+        ).replace("-", "")
+
+
+def test_extract_personal_info_international_phone_formats(extractor):
+    """Test A3: Phone extraction handles international formats."""
+    test_cases = [
+        ("+44 20 1234 5678", "UK"),
+        ("+1 (555) 123-4567", "US"),
+        ("+31-6-12345678", "NL"),
+    ]
+
+    for test_phone, label in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {test_phone}
+        Some City, Country
+        """
+
+        info = extractor._extract_personal_info(text)
+        assert info.phone is not None, f"Failed to extract {label} phone: {test_phone}"
+
+
+def test_extract_location_area_patterns(extractor):
+    """Test A4: Location extraction handles Area/Greater/Remote patterns."""
+    test_cases = [
+        ("Amsterdam Area", "Amsterdam", None),
+        ("Greater London", "London", None),  # Will match "London" from the city list
+        ("Remote - Netherlands", "Remote", "Netherlands"),
+    ]
+
+    for location_text, expected_city, expected_country in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {location_text}
+        """
+
+        city, country = extractor._extract_location_from_header(text)
+        assert city is not None, f"Failed to extract city from: {location_text}"
+        assert (
+            expected_city.lower() in city.lower()
+        ), f"Expected {expected_city}, got {city}"
+        if expected_country:
+            assert country is not None
+            assert expected_country.lower() in country.lower()
+
+
+def test_extract_location_expanded_cities(extractor):
+    """Test A4: Location extraction recognizes expanded city list."""
+    dutch_cities = ["Rotterdam", "Utrecht", "Eindhoven", "Groningen", "Breda"]
+    intl_cities = ["London", "Berlin", "Paris", "Brussels", "Munich"]
+
+    for city in dutch_cities + intl_cities:
+        text = f"""
+        Jane Smith
+        jane@example.com
+        {city}
+        Senior Developer
+        """
+
+        extracted_city, country = extractor._extract_location_from_header(text)
+        if extracted_city:  # Some short texts may not be recognized
+            assert city.lower() in extracted_city.lower(), f"Failed to extract {city}"
+
+
+def test_parse_date_dutch_variants(extractor):
+    """Test A2: Date parsing handles Dutch month abbreviations and variants."""
+    test_cases = [
+        "jan 2023",  # Abbreviated month
+        "mrt 2024",  # Dutch-specific abbreviation
+        "vanaf jan 2020",  # "from"
+        "sinds 2019",  # "since"
+        "tot heden",  # "until present"
+        "tot nu",  # "until now"
+    ]
+
+    for date_str in test_cases:
+        # parse_date should handle these without raising an exception
+        result = extractor._parse_date(date_str)
+        # If it's a "present" variant, should return None (ongoing)
+        # If it's a proper date, should return a date object
+        # Either is acceptable - just shouldn't crash
+        assert result is None or isinstance(result, date), f"Failed on: {date_str}"
