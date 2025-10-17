@@ -1033,14 +1033,14 @@ class GenericPDFExtractor(ResumeExtractor):
         seen_skills = set()  # Track duplicates
 
         # Split by common delimiters
-        skill_items = re.split(r"[,•\n·]", text)
+        skill_items = re.split(r"[,•\n·|]", text)
 
         # Also try splitting by multiple spaces (common in CVs)
         if len(skill_items) < 3:
             # Try splitting by double space or newline
             skill_items = re.split(r"\s{2,}|\n", text)
 
-        # Noise words to skip (common resume fluff)
+        # Expanded noise words to skip (common resume fluff)
         noise_words = {
             "skills",
             "experience",
@@ -1056,42 +1056,81 @@ class GenericPDFExtractor(ResumeExtractor):
             "page",
             "vaardigheden",  # Dutch
             "competenties",  # Dutch
+            "expertise",
+            "competencies",
+            "technical",
+            "tools",
+            "technologies",
+            "software",
+            "programming",
+            "languages",
+            "talen",  # Dutch
+            "strong",
+            "working",
+            "understanding",
         }
+
+        # Section header patterns (more strict detection)
+        section_header_pattern = re.compile(
+            r"^(vaardigheden|skills|competenties|ervaring|experience|"
+            r"opleiding|education|talen|languages|certificaten|certifications?)$",
+            re.IGNORECASE,
+        )
 
         for item in skill_items:
             item = item.strip()
 
-            # Basic validation
-            if not item or len(item) < 2 or len(item) > 50:
+            # Basic validation - allow longer for compound skills
+            if not item or len(item) < 2 or len(item) > 80:
                 continue
 
             # Skip if it's just numbers or dates
             if re.match(r"^[\d\s\-/]+$", item):
                 continue
 
+            # Skip date ranges (common in job descriptions)
+            if re.search(r"\d{4}\s*[-–—]\s*\d{4}", item):
+                continue
+            if re.search(
+                r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}", item
+            ):
+                continue
+
             # Skip noise words
             if item.lower() in noise_words:
                 continue
 
-            # Skip if it looks like a section header
+            # Skip if it's exactly a section header (strict match)
+            if section_header_pattern.match(item):
+                continue
+
+            # Skip if it looks like a full sentence (job description)
+            if len(item.split()) > 10:
+                continue
+
+            # Skip if it looks like a job title or description
             if any(
-                header in item.lower()
-                for header in [
-                    "vaardigheden",
-                    "skills",
-                    "competenties",
-                    "ervaring",
-                    "experience",
+                phrase in item.lower()
+                for phrase in [
+                    "responsible for",
+                    "working with",
+                    "experience with",
+                    "knowledge of",
+                    "verantwoordelijk voor",  # Dutch
+                    "ervaring met",  # Dutch
                 ]
             ):
                 continue
 
-            # Skip if contains too many numbers (likely not a skill name)
-            if sum(c.isdigit() for c in item) > len(item) // 2:
+            # Allow compound skills with slashes, hyphens, parentheses
+            # e.g., "CI/CD", "REST APIs", "Python (Django)"
+            # But skip if it's mostly numbers
+            digit_ratio = sum(c.isdigit() for c in item) / len(item) if item else 0
+            if digit_ratio > 0.5:
                 continue
 
-            # Normalize for duplicate detection (lowercase, remove spaces)
-            normalized = item.lower().replace(" ", "")
+            # Normalize for duplicate detection (lowercase, remove spaces/punctuation)
+            normalized = re.sub(r"[^\w]", "", item.lower())
             if normalized in seen_skills:
                 continue
 

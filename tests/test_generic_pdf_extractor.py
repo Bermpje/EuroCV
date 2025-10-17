@@ -792,3 +792,152 @@ def test_section_splitting_sidebar_handling(extractor):
     assert "experience" in sections
     assert "language" in sections
     assert "education" in sections
+
+
+def test_extract_skills_with_section_headers(extractor):
+    """Test skills extraction filters out section headers."""
+    text = """
+    SKILLS
+    Python
+    Java
+    Skills
+    JavaScript
+    VAARDIGHEDEN
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should not include section headers
+    assert "skills" not in skill_names
+    assert "vaardigheden" not in skill_names
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("java" in name for name in skill_names)
+
+
+def test_extract_skills_compound_with_slashes(extractor):
+    """Test skills extraction handles compound skills with slashes."""
+    text = "CI/CD, HTML/CSS, Git/GitHub, REST APIs"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    assert any("CI/CD" in name for name in skill_names)
+    assert any("HTML/CSS" in name for name in skill_names)
+    assert any("Git" in name or "GitHub" in name for name in skill_names)
+
+
+def test_extract_skills_with_numbers(extractor):
+    """Test skills extraction handles skills with version numbers."""
+    text = "Python3, Java8, Angular 12, Node.js 16"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should include skills with numbers (but not mostly numbers)
+    assert any("Python" in name for name in skill_names)
+    assert len(skills) >= 2
+
+
+def test_extract_skills_filter_job_descriptions(extractor):
+    """Test skills extraction filters out job description phrases."""
+    text = """
+    Python
+    Java
+    Responsible for developing applications
+    Experience with cloud platforms
+    JavaScript
+    Working with agile teams
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should filter out description phrases
+    assert not any("responsible for" in name for name in skill_names)
+    assert not any("experience with" in name for name in skill_names)
+    assert not any("working with" in name for name in skill_names)
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("javascript" in name for name in skill_names)
+
+
+def test_extract_skills_filter_date_ranges(extractor):
+    """Test skills extraction filters out date ranges."""
+    text = """
+    Python
+    2019 - 2023
+    Java
+    Jan 2020 - Dec 2022
+    JavaScript
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should not include date ranges
+    assert not any("2019" in name for name in skill_names)
+    assert not any("2023" in name for name in skill_names)
+    assert not any("Jan" in name and "2020" in name for name in skill_names)
+    # Should include actual skills
+    assert len(skills) >= 2
+
+
+def test_extract_skills_compound_with_parentheses(extractor):
+    """Test skills extraction handles skills with parentheses."""
+    text = "Python (Django), React (Hooks), AWS (EC2/S3)"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    assert any("Django" in name for name in skill_names)
+    assert len(skills) >= 2
+
+
+def test_extract_skills_filter_long_sentences(extractor):
+    """Test skills extraction filters out full sentences."""
+    text = """
+    Python
+    Experienced developer with strong background in full stack development and cloud architecture
+    JavaScript
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should not include the long sentence
+    assert not any(
+        len(name.split()) > 10 for name in skill_names
+    ), "Should filter long sentences"
+    # Should include actual skills
+    assert any("python" in name.lower() for name in skill_names)
+
+
+def test_extract_skills_enhanced_noise_filtering(extractor):
+    """Test enhanced noise word filtering."""
+    text = """
+    Python
+    Technical
+    Java
+    Expertise
+    JavaScript
+    Programming
+    Docker
+    Software
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should filter enhanced noise words
+    assert "technical" not in skill_names
+    assert "expertise" not in skill_names
+    assert "programming" not in skill_names
+    assert "software" not in skill_names
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("docker" in name for name in skill_names)
