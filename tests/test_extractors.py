@@ -1474,3 +1474,212 @@ def test_linkedin_extractor_date_full_format(sample_pdf_file):
 
     date3 = extractor._parse_date("2023-01")
     assert date3 is not None
+
+
+# Additional Edge Case Tests for DOCX Extractor Coverage
+
+
+def test_docx_extractor_work_exp_short_before_text():
+    """Test work experience with very short text before dates (should skip)."""
+    extractor = DOCXExtractor()
+
+    text = """Work Experience:
+ABC
+January 2020 - Present"""
+
+    sections = extractor._split_into_sections(text)
+    work_exp = extractor._extract_work_experience(sections.get("work_experience", ""))
+
+    # Should skip entries with < 5 characters before dates
+    assert len(work_exp) == 0
+
+
+def test_docx_extractor_work_exp_single_line_position():
+    """Test work experience with only position (no employer)."""
+    extractor = DOCXExtractor()
+
+    text = """Work Experience:
+Senior Developer
+January 2020 - Present
+Full-stack development"""
+
+    sections = extractor._split_into_sections(text)
+    work_exp = extractor._extract_work_experience(sections.get("work_experience", ""))
+
+    assert len(work_exp) == 1
+    assert work_exp[0].position == "Senior Developer"
+    assert work_exp[0].employer is None
+
+
+def test_docx_extractor_metadata_extraction_failure(tmp_path):
+    """Test metadata extraction with minimal document."""
+    from docx import Document as DocxDocument
+
+    extractor = DOCXExtractor()
+
+    # Create a minimal DOCX
+    doc = DocxDocument()
+    doc.add_paragraph("Test content with minimal data")
+
+    test_file = tmp_path / "test_minimal.docx"
+    doc.save(str(test_file))
+
+    # This should not crash even with minimal metadata
+    result = extractor.extract(str(test_file))
+    assert isinstance(result, Resume)
+
+
+def test_docx_extractor_parse_date_year_only():
+    """Test date parsing with year only."""
+    extractor = DOCXExtractor()
+
+    result = extractor._parse_date("2020")
+    assert result is not None
+    assert result.year == 2020
+    assert result.month == 1
+    assert result.day == 1
+
+
+def test_docx_extractor_parse_date_invalid():
+    """Test date parsing with invalid date string."""
+    extractor = DOCXExtractor()
+
+    result = extractor._parse_date("invalid date")
+    assert result is None
+
+
+def test_docx_extractor_parse_date_with_only_year_in_text():
+    """Test date parsing extracts year from text."""
+    extractor = DOCXExtractor()
+
+    result = extractor._parse_date("Started in 2019 at company")
+    assert result is not None
+    assert result.year == 2019
+
+
+def test_docx_extractor_education_single_line():
+    """Test education extraction with single line (no organization)."""
+    extractor = DOCXExtractor()
+
+    text = """Education:
+2015 - 2019
+Bachelor Computer Science"""
+
+    sections = extractor._split_into_sections(text)
+    education = extractor._extract_education(sections.get("education", ""))
+
+    assert len(education) >= 1
+
+
+def test_docx_extractor_certifications_with_special_chars():
+    """Test certification extraction with special characters."""
+    extractor = DOCXExtractor()
+
+    text = """Certifications:
+AWS Certified Solutions Architect – Associate
+Google Cloud Professional (GCP)
+Microsoft Azure: Administrator"""
+
+    sections = extractor._split_into_sections(text)
+    certs = extractor._extract_certifications(sections.get("certifications", ""))
+
+    assert len(certs) >= 2
+
+
+def test_docx_extractor_skills_empty_after_filtering():
+    """Test skills extraction where all items are filtered as noise."""
+    extractor = DOCXExtractor()
+
+    text = """Skills:
+skills
+vaardigheden
+software
+kennis"""
+
+    sections = extractor._split_into_sections(text)
+    skills = extractor._extract_skills(sections.get("skills", ""))
+
+    # All should be filtered as noise
+    assert len(skills) == 0
+
+
+def test_docx_extractor_languages_without_proficiency():
+    """Test language extraction without explicit proficiency levels."""
+    extractor = DOCXExtractor()
+
+    text = """Languages:
+English
+Dutch
+German"""
+
+    sections = extractor._split_into_sections(text)
+    languages = extractor._extract_languages(sections.get("languages", ""))
+
+    # Should extract languages (proficiency may be None without explicit indicators)
+    assert len(languages) >= 1
+    # Check that languages are extracted
+    lang_names = [lang.language for lang in languages]
+    assert any(name in lang_names for name in ["English", "Dutch", "German"])
+
+
+def test_docx_extractor_personal_info_no_name():
+    """Test personal info extraction when name is not found."""
+    extractor = DOCXExtractor()
+
+    text = """Contact:
+Email: test@example.com
+Phone: +31 6 12345678"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.email == "test@example.com"
+    assert info.first_name is None
+    assert info.last_name is None
+
+
+def test_docx_extractor_personal_info_no_location():
+    """Test personal info extraction without location."""
+    extractor = DOCXExtractor()
+
+    text = """Name: John Doe
+Email: john@example.com"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.first_name == "John"
+    assert info.last_name == "Doe"
+    assert info.city is None
+    assert info.country is None
+
+
+def test_docx_extractor_section_splitting_no_sections():
+    """Test section splitting with text that has no section headers."""
+    extractor = DOCXExtractor()
+
+    text = """This is just some plain text
+without any section headers
+or structure"""
+
+    sections = extractor._split_into_sections(text)
+
+    # Should return empty dict or handle gracefully
+    assert isinstance(sections, dict)
+
+
+def test_docx_extractor_work_exp_no_description():
+    """Test work experience without description (minimal entry)."""
+    extractor = DOCXExtractor()
+
+    text = """Work Experience:
+Software Engineer
+Tech Company
+January 2020 - Present"""
+
+    sections = extractor._split_into_sections(text)
+    work_exp = extractor._extract_work_experience(sections.get("work_experience", ""))
+
+    assert len(work_exp) == 1
+    assert work_exp[0].position == "Software Engineer"
+    assert work_exp[0].employer == "Tech Company"
+    # Description might be None or empty
+    assert work_exp[0].description is None or work_exp[0].description == ""
