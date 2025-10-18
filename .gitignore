@@ -136,6 +136,9 @@ conversions/
 temp/
 tmp/
 
+# Input files (resumes for testing)
+input/
+
 # UV (modern Python package manager)
 .uv/
 uv.lock
