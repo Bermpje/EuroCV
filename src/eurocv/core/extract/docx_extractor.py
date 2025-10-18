@@ -200,8 +200,8 @@ class DOCXExtractor(ResumeExtractor):
         # Extract personal info
         resume.personal_info = self._extract_personal_info(text)
 
-        # If author is in metadata, try to use it
-        if metadata.get("author"):
+        # Override with metadata author ONLY if we didn't extract a name from text
+        if metadata.get("author") and not resume.personal_info.first_name:
             author_parts = metadata["author"].split()
             if len(author_parts) >= 2:
                 resume.personal_info.first_name = author_parts[0]
@@ -260,6 +260,7 @@ class DOCXExtractor(ResumeExtractor):
         # Extract phone - enhanced patterns (same as GenericPDFExtractor)
         phone_patterns = [
             r"\+\d{1,3}\s*\(0\)\s*\d{1,3}\s*\d{6,8}",  # +31 (0)6 12345678
+            r"\+\d{1,3}\s+\d{1,2}\s+\d{2}\s+\d{2}\s+\d{2}\s+\d{2}",  # +31 6 53 75 43 72
             r"\+\d{1,3}[-\s]?\d{1,3}[-\s]?\d{6,8}",  # +31-6-12345678
             r"0\d{1}[-\s]?\d{8}",  # 06-12345678
             r"\(?\d{2,4}\)?[-\s]?\d{6,7}",  # (020) 1234567
@@ -294,12 +295,18 @@ class DOCXExtractor(ResumeExtractor):
 
         # Extract name - look for "Naam:" pattern or first line
         name_patterns = [
-            r"(?i)(?:naam|name)[\s:]+([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            # Dutch/English "Name:" pattern - stop at newline to avoid capturing next field
+            r"(?i)(?:naam|name)[\s:]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+?)(?=\s*\n|\s*$)",
+            # Title + Name pattern (drs. ing. Emiel Kremers)
+            r"(?:drs\.|ir\.|ing\.|dr\.|prof\.)\s+(?:drs\.|ir\.|ing\.|dr\.|prof\.\s+)?([A-Z][a-z]+\s+[A-Z][a-z]+)(?=\s*\n|\s*$)",
+            # CV header with name (Curriculum Vitae Name)
+            r"(?i)curriculum\s+vitae\s+(?:drs\.|ir\.|ing\.|dr\.|prof\.\s+)?([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)(?=\s*\n|\s*$)",
+            # Standalone capitalized name
             r"^([A-Z][a-z]+\s+[A-Z][a-z]+)$",
         ]
 
         for pattern in name_patterns:
-            name_match = re.search(pattern, text[:500], re.MULTILINE)
+            name_match = re.search(pattern, text[:800], re.MULTILINE)
             if name_match:
                 name = name_match.group(1).strip()
                 parts = name.split()
@@ -329,20 +336,28 @@ class DOCXExtractor(ResumeExtractor):
 
         # Extract location - look for city/country
         location_patterns = [
-            r"(?i)(?:adres|address)[\s:]+.*?([A-Z][a-z]+)\s+\(([A-Z][a-z]+)\)",  # Roosendaal (Nederland)
-            r"([A-Z][a-z]+),\s*([A-Z][a-z]+)",  # Amsterdam, Netherlands
+            # Dutch address format: postal code + city (country)
+            r"\d{4}\s*[A-Z]{2}\s+([A-Z][a-z]+)\s*\(([^)]+)\)",  # 4702 GK Roosendaal (Nederland)
+            # Address line with city (country)
+            r"(?i)(?:adres|address)[\s:]+.*?([A-Z][a-z]+)\s+\(([A-Z][a-z]+)\)",
+            # Simple city, country
+            r"([A-Z][a-z]+),\s*([A-Z][a-z]+)",
         ]
 
         for pattern in location_patterns:
-            loc_match = re.search(pattern, text[:1000])
+            loc_match = re.search(pattern, text[:1500])
             if loc_match:
                 info.city = loc_match.group(1)
                 country = loc_match.group(2)
                 # Translate common Dutch country names
-                if country.lower() in ["nederland", "netherlands"]:
-                    info.country = "Netherlands"
-                else:
-                    info.country = country
+                country_map = {
+                    "nederland": "Netherlands",
+                    "netherlands": "Netherlands",
+                    "duitsland": "Germany",
+                    "belgië": "Belgium",
+                    "frankrijk": "France",
+                }
+                info.country = country_map.get(country.lower(), country)
                 break
 
         return info
@@ -462,13 +477,13 @@ class DOCXExtractor(ResumeExtractor):
             if not line_stripped or len(line_stripped) < 5:
                 continue
 
-            # Skip section headers
+            # Skip section headers and noise
             if line_stripped.lower() in [
                 "training",
                 "certificering",
                 "certifications",
                 "certificates",
-            ]:
+            ] or re.match(r"^en\s+certificering:?$", line_stripped, re.IGNORECASE):
                 continue
 
             # Extract year at the start: 2020\tCertification Name
@@ -505,21 +520,36 @@ class DOCXExtractor(ResumeExtractor):
 
         language_names = [
             "English",
+            "Engels",  # Dutch for English
             "Dutch",
+            "Nederlands",
             "German",
+            "Duits",  # Dutch
             "French",
+            "Frans",  # Dutch
             "Spanish",
+            "Spaans",  # Dutch
             "Italian",
+            "Italiaans",  # Dutch
             "Portuguese",
             "Chinese",
             "Japanese",
             "Russian",
             "Arabic",
-            "Nederlands",
         ]
 
         # CEFR levels
         cefr_pattern = r"\b([A-C][1-2])\b"
+
+        # Language name normalization (Dutch to English)
+        language_normalize = {
+            "engels": "English",
+            "nederlands": "Dutch",
+            "duits": "German",
+            "frans": "French",
+            "spaans": "Spanish",
+            "italiaans": "Italian",
+        }
 
         # Proficiency keywords
         proficiency_map = {
@@ -538,7 +568,9 @@ class DOCXExtractor(ResumeExtractor):
 
         for lang in language_names:
             if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
-                language = Language(language=lang)
+                # Normalize language name to English
+                lang_normalized = language_normalize.get(lang.lower(), lang)
+                language = Language(language=lang_normalized)
 
                 # Find context around language name
                 lang_pos = text.lower().find(lang.lower())
