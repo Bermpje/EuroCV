@@ -1,9 +1,9 @@
 """DOCX extraction functionality with multi-language support."""
 
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from docx import Document
 
@@ -410,14 +410,208 @@ class DOCXExtractor(ResumeExtractor):
         return sections
 
     def _extract_work_experience(self, text: str) -> list[WorkExperience]:
-        """Extract work experience entries."""
+        """Extract work experience entries with structured parsing.
+
+        Parses individual job entries with position, employer, and dates.
+        Supports Dutch and English formats.
+
+        Args:
+            text: Work experience section text
+
+        Returns:
+            List of WorkExperience objects
+        """
         experiences = []
 
-        if text.strip():
-            exp = WorkExperience(description=text.strip()[:1000])
-            experiences.append(exp)
+        # Split text into potential entries by looking for date ranges
+        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present/Heden
+        months_en = r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
+        months_nl = r"(?:januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec)"
+        present_keywords = r"(?:Present|present|Current|current|Heden|heden|Nu|nu)"
+
+        date_range_pattern = f"((?:{months_en}|{months_nl})\\s+\\d{{4}})\\s*[-–—]\\s*((?:{months_en}|{months_nl})\\s+\\d{{4}}|{present_keywords})"
+
+        entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
+
+        # Process entries
+        # After split: [text_before_1, start1, end1, text_after_1, start2, end2, text_after_2, ...]
+        i = 0
+        while i < len(entries):
+            # Check if this position starts a date pattern: text, start_date, end_date, content_after
+            if i + 3 <= len(entries):
+                before_text = entries[i].strip()
+                start_date_str = (
+                    entries[i + 1].strip() if i + 1 < len(entries) else None
+                )
+                end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
+                content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
+
+                # Check if we have valid date strings
+                if start_date_str and end_date_str and before_text:
+                    # Must have some text before dates (position/company)
+                    if len(before_text) < 5:
+                        i += 1
+                        continue
+
+                    exp = WorkExperience()
+
+                    # Parse dates
+                    exp.start_date = self._parse_date(start_date_str)
+                    if any(
+                        keyword in end_date_str.lower()
+                        for keyword in ["heden", "present", "current", "nu"]
+                    ):
+                        exp.current = True
+                        exp.end_date = None
+                    else:
+                        exp.end_date = self._parse_date(end_date_str)
+
+                    # Extract position and employer from text before dates
+                    lines_before = [
+                        line.strip() for line in before_text.split("\n") if line.strip()
+                    ]
+
+                    # Take last 1-2 lines as position/company
+                    if lines_before:
+                        if len(lines_before) >= 2:
+                            potential_position = lines_before[-2]
+                            potential_company = lines_before[-1]
+
+                            # Handle Dutch patterns "bij Company" or "voor Company"
+                            bij_match = re.search(
+                                r"(bij|voor|at)\s+(.+)",
+                                potential_company,
+                                re.IGNORECASE,
+                            )
+                            if bij_match:
+                                exp.employer = bij_match.group(2).strip()
+                                exp.position = potential_position
+                            else:
+                                exp.position = potential_position
+                                exp.employer = potential_company
+
+                            # Detect seniority levels
+                            seniority_levels = [
+                                "Senior",
+                                "Junior",
+                                "Lead",
+                                "Principal",
+                                "Staff",
+                                "Chief",
+                            ]
+                            _ = any(
+                                level in exp.position
+                                for level in seniority_levels
+                                if exp.position
+                            )
+
+                            # Detect contractor roles
+                            contractor_keywords = [
+                                "Freelance",
+                                "Contractor",
+                                "Zelfstandig",
+                                "Zzp",
+                                "ZZP",
+                                "Consultant",
+                            ]
+                            is_contractor = any(
+                                kw in exp.position or kw in potential_company
+                                for kw in contractor_keywords
+                            )
+                            if is_contractor and exp.position:
+                                # Prepend to description if not already there
+                                if not any(
+                                    kw.lower() in exp.position.lower()
+                                    for kw in contractor_keywords
+                                ):
+                                    exp.description = (
+                                        f"Contractor role. {exp.description or ''}"
+                                    )
+
+                        elif len(lines_before) == 1:
+                            # Only one line - use it as position
+                            exp.position = lines_before[-1]
+
+                    # Extract description from content after dates
+                    # Take first few lines or up to next date pattern
+                    desc_lines = [
+                        line.strip()
+                        for line in content_after.split("\n")[:5]
+                        if line.strip()
+                    ]
+                    if desc_lines:
+                        exp.description = "\n".join(desc_lines)
+
+                    experiences.append(exp)
+
+                    # Move to next potential entry (skip the date parts we just processed)
+                    i += 4
+                else:
+                    i += 1
+            else:
+                i += 1
 
         return experiences
+
+    def _parse_date(self, date_str: str) -> Optional[date]:
+        """Parse date string to date object.
+
+        Supports various formats including Dutch month names.
+
+        Args:
+            date_str: Date string (e.g., "January 2020", "januari 2020")
+
+        Returns:
+            date object or None if parsing fails
+        """
+        if not date_str:
+            return None
+
+        date_str = date_str.strip()
+
+        # Check for present keywords - use word boundaries to avoid false matches
+        for kw in self.PRESENT_KEYWORDS:
+            if re.search(rf"\b{re.escape(kw)}\b", date_str, re.IGNORECASE):
+                return None
+
+        # Try various date formats - English first
+        english_formats = [
+            "%B %Y",  # January 2020
+            "%b %Y",  # Jan 2020
+            "%Y-%m-%d",  # 2020-01-15
+            "%Y",  # 2020
+        ]
+
+        for fmt in english_formats:
+            try:
+                parsed = datetime.strptime(date_str, fmt)
+                return parsed.date()
+            except ValueError:
+                continue
+
+        # Try Dutch months by normalizing to numbers
+        date_str_lower = date_str.lower()
+        for dutch_month, month_num in self.DUTCH_MONTHS.items():
+            if dutch_month in date_str_lower:
+                # Replace Dutch month with month number
+                date_str = re.sub(
+                    rf"\b{dutch_month}\b", month_num, date_str, flags=re.IGNORECASE
+                )
+                # Try month + year format
+                try:
+                    parsed = datetime.strptime(date_str, "%m %Y")
+                    return parsed.date()
+                except ValueError:
+                    pass
+                break
+
+        # If all else fails, try to extract just the year
+        year_match = re.search(r"\b(19|20)\d{2}\b", date_str)
+        if year_match:
+            year = int(year_match.group())
+            return date(year, 1, 1)
+
+        return None
 
     def _extract_education(self, text: str) -> list[Education]:
         """Extract education entries with multi-year range support.
