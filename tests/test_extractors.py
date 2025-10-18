@@ -582,6 +582,327 @@ Responsibilities:
     sections = extractor._split_into_sections(text)
     assert isinstance(sections, dict)
 
+
+# Phase 1.1: Certification Extraction Tests
+
+
+def test_docx_extractor_certifications_with_years():
+    """Test DOCX certification extraction with years."""
+    extractor = DOCXExtractor()
+
+    text = """Training en certificering:
+2020\tMicrosoft Certified: Azure Fundamentals
+2019\tAWS Certified Solutions Architect - Associate
+2018\tCloudera Certified Administrator"""
+
+    sections = extractor._split_into_sections(text)
+    certs = extractor._extract_certifications(sections.get("certifications", ""))
+
+    assert len(certs) == 3
+    assert certs[0].name == "Microsoft Certified: Azure Fundamentals"
+    assert certs[1].name == "AWS Certified Solutions Architect - Associate"
+    assert certs[2].name == "Cloudera Certified Administrator"
+
+
+def test_docx_extractor_certifications_without_years():
+    """Test DOCX certification extraction without years."""
+    extractor = DOCXExtractor()
+
+    text = """Certifications:
+ITIL Foundation
+Prince 2 Practitioner
+Scrum Master Certified"""
+
+    sections = extractor._split_into_sections(text)
+    certs = extractor._extract_certifications(sections.get("certifications", ""))
+
+    assert len(certs) == 3
+    assert certs[0].name == "ITIL Foundation"
+    assert certs[1].name == "Prince 2 Practitioner"
+    assert certs[2].name == "Scrum Master Certified"
+
+
+def test_docx_extractor_certifications_section_header_filtering():
+    """Test that certification section headers are filtered out."""
+    extractor = DOCXExtractor()
+
+    text = """Training en certificering:
+2020	AWS Certified Solutions Architect
+2019	Microsoft Certified Azure Administrator
+
+Skills:
+Python, Java"""
+
+    sections = extractor._split_into_sections(text)
+    certs = extractor._extract_certifications(sections.get("certifications", ""))
+
+    # Should extract 2 certifications
+    assert len(certs) == 2
+    assert certs[0].name == "AWS Certified Solutions Architect"
+    assert certs[1].name == "Microsoft Certified Azure Administrator"
+
+
+def test_docx_extractor_certifications_empty_section():
+    """Test DOCX certification extraction with empty section."""
+    extractor = DOCXExtractor()
+
+    text = """Certifications:"""
+
+    sections = extractor._split_into_sections(text)
+    certs = extractor._extract_certifications(sections.get("certifications", ""))
+
+    assert len(certs) == 0
+
+
+# Phase 1.2: Language Proficiency Tests
+
+
+def test_docx_extractor_languages_dutch_keywords():
+    """Test DOCX language extraction with Dutch proficiency keywords."""
+    extractor = DOCXExtractor()
+
+    text = """Talen:
+Nederlands: Moedertaal
+Engels: Zeer goed
+Duits: Vloeiend
+Frans: Redelijk"""
+
+    sections = extractor._split_into_sections(text)
+    languages = extractor._extract_languages(sections.get("languages", ""))
+
+    # Should detect Nederlands, Engels, Duits, Frans
+    assert len(languages) >= 3
+
+    # Find Dutch language
+    dutch = next((lang for lang in languages if lang.language == "Dutch"), None)
+    assert dutch is not None
+    assert dutch.is_native is True
+    assert dutch.listening == "C2"
+
+
+def test_docx_extractor_languages_english_keywords():
+    """Test DOCX language extraction with English proficiency keywords."""
+    extractor = DOCXExtractor()
+
+    text = """Languages:
+English: Native
+Spanish: Fluent
+German: Basic"""
+
+    sections = extractor._split_into_sections(text)
+    languages = extractor._extract_languages(sections.get("languages", ""))
+
+    assert len(languages) >= 2
+
+    # Find English
+    english = next((lang for lang in languages if lang.language == "English"), None)
+    assert english is not None
+    assert english.is_native is True
+    assert english.listening == "C2"
+
+
+def test_docx_extractor_languages_cefr_detection():
+    """Test DOCX language extraction with CEFR levels."""
+    extractor = DOCXExtractor()
+
+    text = """Languages:
+English: C1
+German: B2
+French: A2"""
+
+    sections = extractor._split_into_sections(text)
+    languages = extractor._extract_languages(sections.get("languages", ""))
+
+    assert len(languages) >= 2
+
+    # Find English
+    english = next((lang for lang in languages if lang.language == "English"), None)
+    assert english is not None
+    assert english.listening == "C1"
+    assert english.reading == "C1"
+
+
+def test_docx_extractor_languages_normalization():
+    """Test language name normalization from Dutch to English."""
+    extractor = DOCXExtractor()
+
+    text = """Talen:
+Engels: Moedertaal
+Nederlands: Moedertaal
+Duits: Goed
+Frans: Redelijk"""
+
+    sections = extractor._split_into_sections(text)
+    languages = extractor._extract_languages(sections.get("languages", ""))
+
+    # Should normalize Dutch names to English
+    lang_names = [lang.language for lang in languages]
+    assert "English" in lang_names
+    assert "Dutch" in lang_names
+    assert "German" in lang_names
+    assert "French" in lang_names
+
+
+# Phase 1.3: Enhanced Personal Info Tests
+
+
+def test_docx_extractor_personal_info_dutch_naam_pattern():
+    """Test personal info extraction with Dutch 'Naam:' pattern."""
+    extractor = DOCXExtractor()
+
+    text = """Curriculum Vitae
+Persoonlijke Gegevens:
+Naam:\tEmiel Kremers
+Adres:\tVan Gilselaan 18
+Telefoon:\t+31 6 53 75 43 72
+E-mail:\temiel@fourco.nl"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.first_name == "Emiel"
+    assert info.last_name == "Kremers"
+    assert info.email == "emiel@fourco.nl"
+
+
+def test_docx_extractor_personal_info_academic_titles():
+    """Test personal info extraction with Dutch academic titles."""
+    extractor = DOCXExtractor()
+
+    text = """Curriculum Vitae drs. ing. Emiel Kremers
+Persoonlijke Gegevens:
+E-mail: emiel@fourco.nl"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.first_name == "Emiel"
+    assert info.last_name == "Kremers"
+
+
+def test_docx_extractor_personal_info_phone_with_spaces():
+    """Test phone extraction with space-separated format."""
+    extractor = DOCXExtractor()
+
+    text = """Contact Information
+Phone: +31 6 53 75 43 72
+Email: test@example.com"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.phone == "+31 6 53 75 43 72"
+
+
+def test_docx_extractor_personal_info_dutch_postal_location():
+    """Test location extraction with Dutch postal code format."""
+    extractor = DOCXExtractor()
+
+    text = """Persoonlijke Gegevens:
+Naam: Jan Jansen
+Adres: Hoofdstraat 123
+4702 GK Roosendaal (Nederland)
+Telefoon: +31 6 12345678"""
+
+    info = extractor._extract_personal_info(text)
+
+    assert info.city == "Roosendaal"
+    assert info.country == "Netherlands"
+
+
+def test_docx_extractor_personal_info_country_translation():
+    """Test country name translation from Dutch to English."""
+    extractor = DOCXExtractor()
+
+    # Test Nederland -> Netherlands
+    text1 = """Adres: Straat 1
+1234 AB Amsterdam (Nederland)"""
+    info1 = extractor._extract_personal_info(text1)
+    assert info1.country == "Netherlands"
+
+    # Test Duitsland -> Germany
+    text2 = """Adres: Strasse 1
+12345 AB Berlin (Duitsland)"""
+    info2 = extractor._extract_personal_info(text2)
+    assert info2.country == "Germany"
+
+
+# Phase 1.4: Skills Filtering Tests
+
+
+def test_docx_extractor_skills_page_number_filtering():
+    """Test that page numbers are filtered from skills."""
+    extractor = DOCXExtractor()
+
+    text = """Skills:
+Python, Java, JavaScript
+Page 2
+Docker, Kubernetes
+Page 3"""
+
+    sections = extractor._split_into_sections(text)
+    skills = extractor._extract_skills(sections.get("skills", ""))
+
+    skill_names = [s.name for s in skills]
+    assert "Python" in skill_names
+    assert "Java" in skill_names
+    assert "Page 2" not in skill_names
+    assert "Page 3" not in skill_names
+
+
+def test_docx_extractor_skills_noise_word_filtering():
+    """Test that noise words are filtered from skills."""
+    extractor = DOCXExtractor()
+
+    text = """Vaardigheden:
+Python, Java, Docker
+
+Education:
+Bachelor Computer Science"""
+
+    sections = extractor._split_into_sections(text)
+    skills = extractor._extract_skills(sections.get("skills", ""))
+
+    skill_names = [s.name for s in skills]
+    assert "Python" in skill_names
+    assert "Java" in skill_names
+    assert "Docker" in skill_names
+
+
+def test_docx_extractor_skills_duplicate_detection():
+    """Test case-insensitive duplicate detection."""
+    extractor = DOCXExtractor()
+
+    text = """Skills:
+Python, python, PYTHON
+JavaScript, javascript
+Docker"""
+
+    sections = extractor._split_into_sections(text)
+    skills = extractor._extract_skills(sections.get("skills", ""))
+
+    # Should only have 3 unique skills
+    assert len(skills) == 3
+    skill_names = [s.name for s in skills]
+    assert "Python" in skill_names or "python" in skill_names
+    assert any("javascript" in s.lower() for s in skill_names)
+    assert "Docker" in skill_names
+
+
+def test_docx_extractor_skills_special_delimiters():
+    """Test skill extraction with various delimiters."""
+    extractor = DOCXExtractor()
+
+    text = """Skills:
+Python, Java • JavaScript | Docker · Kubernetes"""
+
+    sections = extractor._split_into_sections(text)
+    skills = extractor._extract_skills(sections.get("skills", ""))
+
+    skill_names = [s.name for s in skills]
+    assert "Python" in skill_names
+    assert "Java" in skill_names
+    assert "JavaScript" in skill_names
+    assert "Docker" in skill_names
+    assert "Kubernetes" in skill_names
+
     personal_info = extractor._extract_personal_info(text)
     assert personal_info is not None
 

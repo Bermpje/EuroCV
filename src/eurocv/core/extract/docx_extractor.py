@@ -377,10 +377,16 @@ class DOCXExtractor(ResumeExtractor):
         section_positions = []
         for section_key, headers in self.SECTION_HEADERS.items():
             # Create regex pattern for all headers of this section
-            pattern = r"(?i)\b(" + "|".join(re.escape(h) for h in headers) + r")[\s:]*"
-            matches = list(re.finditer(pattern, text))
-            for match in matches:
-                section_positions.append((match.start(), section_key, match.group()))
+            # Require headers to be at line start and followed by colon or end of line
+            # Use word boundaries to avoid partial matches
+            for header in headers:
+                # Pattern: start of line (or after newline), header text, optional colon/spaces, newline
+                pattern = r"(?:^|\n)(" + re.escape(header) + r")[\s:]*\n"
+                matches = list(re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE))
+                for match in matches:
+                    section_positions.append(
+                        (match.start(), section_key, match.group().strip())
+                    )
 
         # Sort by position in text
         section_positions.sort()
