@@ -15,7 +15,9 @@ def valid_europass_json():
             "Generator": "EuroCV",
             "XSDVersion": "V3.3",
         },
-        "LearnerInfo": {"Identification": {"PersonName": {"FirstName": "John", "Surname": "Doe"}}},
+        "LearnerInfo": {
+            "Identification": {"PersonName": {"FirstName": "John", "Surname": "Doe"}}
+        },
     }
 
 
@@ -60,7 +62,9 @@ def test_validate_invalid_person_name():
     """Test validation with invalid PersonName."""
     data = {
         "DocumentInfo": {},
-        "LearnerInfo": {"Identification": {"PersonName": "Invalid"}},  # Should be dict, not string
+        "LearnerInfo": {
+            "Identification": {"PersonName": "Invalid"}
+        },  # Should be dict, not string
     }
 
     validator = SchemaValidator()
@@ -250,5 +254,79 @@ def test_validate_skills():
     is_valid, errors = validator.validate_json(data)
 
     # May have some errors, but should not crash
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_validate_json_deeply_nested_invalid():
+    """Test JSON validation with deeply nested invalid data."""
+    validator = SchemaValidator()
+
+    data = {
+        "DocumentInfo": {"CreationDate": "invalid-date-format"},
+        "LearnerInfo": {
+            "Identification": {"PersonName": {"FirstName": 123}},
+            "WorkExperience": [
+                {
+                    "Period": {"From": {"Year": "not-a-year"}},
+                    "Position": {"Label": None},
+                }
+            ],
+        },
+    }
+
+    is_valid, errors = validator.validate_json(data)
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_validate_xml_malformed():
+    """Test XML validation with malformed XML."""
+    validator = SchemaValidator()
+
+    xml_data = '<?xml version="1.0"?><root><unclosed>'
+
+    is_valid, errors = validator.validate_xml(xml_data)
+
+    assert is_valid is False
+    assert len(errors) > 0
+
+
+def test_validate_json_with_null_values():
+    """Test JSON validation with null values in required fields."""
+    validator = SchemaValidator()
+
+    data = {
+        "DocumentInfo": {"CreationDate": None},
+        "LearnerInfo": {"Identification": {"PersonName": None}},
+    }
+
+    is_valid, errors = validator.validate_json(data)
+    assert isinstance(is_valid, bool)
+    assert isinstance(errors, list)
+
+
+def test_validate_xml_empty_string():
+    """Test XML validation with empty string."""
+    validator = SchemaValidator()
+
+    xml_data = ""
+
+    is_valid, errors = validator.validate_xml(xml_data)
+
+    assert is_valid is False
+    assert len(errors) > 0
+
+
+def test_validate_json_missing_required_nested():
+    """Test JSON validation with missing required nested fields."""
+    validator = SchemaValidator()
+
+    data = {
+        "DocumentInfo": {},
+        "LearnerInfo": {"Identification": {}},
+    }
+
+    is_valid, errors = validator.validate_json(data)
     assert isinstance(is_valid, bool)
     assert isinstance(errors, list)

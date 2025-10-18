@@ -1,13 +1,15 @@
-"""DOCX extraction functionality."""
+"""DOCX extraction functionality with multi-language support."""
 
 import re
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from docx import Document
 
 from eurocv.core.extract.base_extractor import ResumeExtractor
 from eurocv.core.models import (
+    Certification,
     Education,
     Language,
     PersonalInfo,
@@ -18,7 +20,95 @@ from eurocv.core.models import (
 
 
 class DOCXExtractor(ResumeExtractor):
-    """Extract text and structure from DOCX files."""
+    """Extract text and structure from DOCX files with multi-language support.
+
+    Reuses extraction logic from GenericPDFExtractor for consistency.
+    """
+
+    # Multi-language section headers (same as GenericPDFExtractor)
+    SECTION_HEADERS = {
+        "work_experience": [
+            "work experience",
+            "professional experience",
+            "employment history",
+            "experience",
+            "werkervaring",  # Dutch
+            "work history",
+            "career",
+        ],
+        "education": [
+            "education",
+            "academic background",
+            "opleidingen",  # Dutch
+            "academic",
+            "qualifications",
+            "degrees",
+        ],
+        "skills": [
+            "skills",
+            "technical skills",
+            "vaardigheden",  # Dutch
+            "software kennis",  # Dutch: software knowledge
+            "competencies",
+            "expertise",
+        ],
+        "languages": [
+            "languages",
+            "language skills",
+            "talen",  # Dutch
+        ],
+        "certifications": [
+            "certifications",
+            "certificates",
+            "training",
+            "professional development",
+            "training en certificering",  # Dutch
+            "certificaten",  # Dutch
+        ],
+        "summary": ["summary", "profile", "about", "samenvatting", "profiel"],
+    }
+
+    # Dutch month names
+    DUTCH_MONTHS = {
+        "jan": "01",
+        "januari": "01",
+        "feb": "02",
+        "februari": "02",
+        "mrt": "03",
+        "maart": "03",
+        "apr": "04",
+        "april": "04",
+        "mei": "05",
+        "jun": "06",
+        "juni": "06",
+        "jul": "07",
+        "juli": "07",
+        "aug": "08",
+        "augustus": "08",
+        "sep": "09",
+        "september": "09",
+        "okt": "10",
+        "oktober": "10",
+        "nov": "11",
+        "november": "11",
+        "dec": "12",
+        "december": "12",
+    }
+
+    # Present keywords (multiple languages)
+    PRESENT_KEYWORDS = [
+        "present",
+        "current",
+        "heden",
+        "nu",
+        "now",
+        "today",
+        "ongoing",
+        "tot heden",
+        "tot nu",
+        "vanaf",
+        "sinds",
+    ]
 
     @property
     def name(self) -> str:
@@ -96,9 +186,7 @@ class DOCXExtractor(ResumeExtractor):
         return metadata
 
     def _parse_text_to_resume(self, text: str, metadata: dict[str, Any]) -> Resume:
-        """Parse extracted text into structured Resume.
-
-        This uses similar heuristics as the PDF extractor.
+        """Parse extracted text into structured Resume with multi-language support.
 
         Args:
             text: Extracted text
@@ -112,41 +200,55 @@ class DOCXExtractor(ResumeExtractor):
         # Extract personal info
         resume.personal_info = self._extract_personal_info(text)
 
-        # If author is in metadata, try to use it
-        if metadata.get("author"):
+        # Override with metadata author ONLY if we didn't extract a name from text
+        if metadata.get("author") and not resume.personal_info.first_name:
             author_parts = metadata["author"].split()
             if len(author_parts) >= 2:
                 resume.personal_info.first_name = author_parts[0]
                 resume.personal_info.last_name = " ".join(author_parts[1:])
 
-        # Extract sections
+        # Extract sections (now with Dutch support)
         sections = self._split_into_sections(text)
 
         # Extract work experience
-        if "experience" in sections or "work" in sections:
-            work_section = sections.get("experience") or sections.get("work", "")
-            resume.work_experience = self._extract_work_experience(work_section)
+        if "work_experience" in sections:
+            resume.work_experience = self._extract_work_experience(
+                sections["work_experience"]
+            )
 
         # Extract education
         if "education" in sections:
             resume.education = self._extract_education(sections["education"])
 
+        # Extract certifications
+        if "certifications" in sections:
+            resume.certifications = self._extract_certifications(
+                sections["certifications"]
+            )
+
         # Extract languages
-        if "language" in sections:
-            resume.languages = self._extract_languages(sections["language"])
+        if "languages" in sections:
+            resume.languages = self._extract_languages(sections["languages"])
 
         # Extract skills
-        if "skill" in sections:
-            resume.skills = self._extract_skills(sections["skill"])
+        if "skills" in sections:
+            resume.skills = self._extract_skills(sections["skills"])
 
         # Extract summary
-        if "summary" in sections or "profile" in sections:
-            resume.summary = sections.get("summary") or sections.get("profile")
+        if "summary" in sections:
+            resume.summary = sections["summary"]
 
         return resume
 
     def _extract_personal_info(self, text: str) -> PersonalInfo:
-        """Extract personal information from text."""
+        """Extract personal information from text with enhanced patterns.
+
+        Args:
+            text: Resume text
+
+        Returns:
+            PersonalInfo object
+        """
         info = PersonalInfo()
 
         # Extract email
@@ -155,46 +257,141 @@ class DOCXExtractor(ResumeExtractor):
         if email_matches:
             info.email = email_matches[0]
 
-        # Extract phone
-        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        phone_matches = re.findall(phone_pattern, text[:500])
-        if phone_matches:
-            info.phone = phone_matches[0]
+        # Extract phone - enhanced patterns (same as GenericPDFExtractor)
+        phone_patterns = [
+            r"\+\d{1,3}\s*\(0\)\s*\d{1,3}\s*\d{6,8}",  # +31 (0)6 12345678
+            r"\+\d{1,3}\s+\d{1,2}\s+\d{2}\s+\d{2}\s+\d{2}\s+\d{2}",  # +31 6 53 75 43 72
+            r"\+\d{1,3}[-\s]?\d{1,3}[-\s]?\d{6,8}",  # +31-6-12345678
+            r"0\d{1}[-\s]?\d{8}",  # 06-12345678
+            r"\(?\d{2,4}\)?[-\s]?\d{6,7}",  # (020) 1234567
+            r"\+?1?\s*\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}",  # US
+            r"\+44\s*\d{2,4}\s*\d{4}\s*\d{4}",  # UK
+            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}",
+        ]
 
-        # Extract name (first line or lines before contact info)
-        lines = text.split("\n")
-        for line in lines[:10]:
-            line = line.strip()
-            if line and len(line.split()) >= 2 and len(line) < 50:
-                if not any(char.isdigit() for char in line) and "@" not in line:
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        info.first_name = parts[0]
-                        info.last_name = " ".join(parts[1:])
-                        break
+        phone_matches = []
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, text[:2000])
+            phone_matches.extend(matches)
+
+        if phone_matches:
+            # Filter out years and validate
+            valid_phones = []
+            for p in phone_matches:
+                clean_phone = (
+                    p.replace(" ", "")
+                    .replace("-", "")
+                    .replace(".", "")
+                    .replace("(", "")
+                    .replace(")", "")
+                )
+                if re.match(r"^\d{4}$", clean_phone):
+                    continue
+                if 6 <= len(re.sub(r"\D", "", clean_phone)) <= 15:
+                    valid_phones.append(p)
+
+            if valid_phones:
+                info.phone = valid_phones[0]
+
+        # Extract name - look for "Naam:" pattern or first line
+        name_patterns = [
+            # Dutch/English "Name:" pattern - stop at newline to avoid capturing next field
+            r"(?i)(?:naam|name)[\s:]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+?)(?=\s*\n|\s*$)",
+            # Title + Name pattern (drs. ing. Emiel Kremers)
+            r"(?:drs\.|ir\.|ing\.|dr\.|prof\.)\s+(?:drs\.|ir\.|ing\.|dr\.|prof\.\s+)?([A-Z][a-z]+\s+[A-Z][a-z]+)(?=\s*\n|\s*$)",
+            # CV header with name (Curriculum Vitae Name)
+            r"(?i)curriculum\s+vitae\s+(?:drs\.|ir\.|ing\.|dr\.|prof\.\s+)?([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)(?=\s*\n|\s*$)",
+            # Standalone capitalized name
+            r"^([A-Z][a-z]+\s+[A-Z][a-z]+)$",
+        ]
+
+        for pattern in name_patterns:
+            name_match = re.search(pattern, text[:800], re.MULTILINE)
+            if name_match:
+                name = name_match.group(1).strip()
+                parts = name.split()
+                if len(parts) >= 2:
+                    info.first_name = parts[0]
+                    info.last_name = " ".join(parts[1:])
+                    break
+
+        # If still no name, try first non-empty line
+        if not info.first_name:
+            lines = text.split("\n")
+            for line in lines[:10]:
+                line = line.strip()
+                # Skip "Curriculum Vitae" and similar
+                if (
+                    line
+                    and "curriculum" not in line.lower()
+                    and "vitae" not in line.lower()
+                ):
+                    if len(line.split()) >= 2 and len(line) < 50:
+                        if not any(char.isdigit() for char in line) and "@" not in line:
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                info.first_name = parts[0]
+                                info.last_name = " ".join(parts[1:])
+                                break
+
+        # Extract location - look for city/country
+        location_patterns = [
+            # Dutch address format: postal code + city (country)
+            r"\d{4}\s*[A-Z]{2}\s+([A-Z][a-z]+)\s*\(([^)]+)\)",  # 4702 GK Roosendaal (Nederland)
+            # Address line with city (country)
+            r"(?i)(?:adres|address)[\s:]+.*?([A-Z][a-z]+)\s+\(([A-Z][a-z]+)\)",
+            # Simple city, country
+            r"([A-Z][a-z]+),\s*([A-Z][a-z]+)",
+        ]
+
+        for pattern in location_patterns:
+            loc_match = re.search(pattern, text[:1500])
+            if loc_match:
+                info.city = loc_match.group(1)
+                country = loc_match.group(2)
+                # Translate common Dutch country names
+                country_map = {
+                    "nederland": "Netherlands",
+                    "netherlands": "Netherlands",
+                    "duitsland": "Germany",
+                    "belgië": "Belgium",
+                    "frankrijk": "France",
+                }
+                info.country = country_map.get(country.lower(), country)
+                break
 
         return info
 
     def _split_into_sections(self, text: str) -> dict[str, str]:
-        """Split resume text into sections."""
+        """Split resume text into sections using multi-language headers.
+
+        Args:
+            text: Resume text
+
+        Returns:
+            Dict mapping section names to content
+        """
         sections = {}
 
-        section_patterns = {
-            "summary": r"(?i)(professional\s+summary|profile|summary|objective)",
-            "experience": r"(?i)(work\s+experience|professional\s+experience|employment|experience)",
-            "education": r"(?i)(education|academic|qualifications)",
-            "skill": r"(?i)(skills|competencies|expertise)",
-            "language": r"(?i)(languages|language\s+skills)",
-        }
-
+        # Build patterns for each section type
         section_positions = []
-        for section_key, pattern in section_patterns.items():
-            matches = list(re.finditer(pattern, text))
-            for match in matches:
-                section_positions.append((match.start(), section_key, match.group()))
+        for section_key, headers in self.SECTION_HEADERS.items():
+            # Create regex pattern for all headers of this section
+            # Require headers to be at line start and followed by colon or end of line
+            # Use word boundaries to avoid partial matches
+            for header in headers:
+                # Pattern: start of line (or after newline), header text, optional colon/spaces, newline
+                pattern = r"(?:^|\n)(" + re.escape(header) + r")[\s:]*\n"
+                matches = list(re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE))
+                for match in matches:
+                    section_positions.append(
+                        (match.start(), section_key, match.group().strip())
+                    )
 
+        # Sort by position in text
         section_positions.sort()
 
+        # Extract content between headers
         for i, (start, key, header) in enumerate(section_positions):
             if i + 1 < len(section_positions):
                 end = section_positions[i + 1][0]
@@ -202,44 +399,338 @@ class DOCXExtractor(ResumeExtractor):
                 end = len(text)
 
             content = text[start:end].strip()
+            # Remove the header itself
             content = re.sub(
                 f"^{re.escape(header)}", "", content, flags=re.IGNORECASE
             ).strip()
+            # Remove any colons after the header
+            content = re.sub(r"^:\s*", "", content).strip()
             sections[key] = content
 
         return sections
 
     def _extract_work_experience(self, text: str) -> list[WorkExperience]:
-        """Extract work experience entries."""
+        """Extract work experience entries with structured parsing.
+
+        Parses individual job entries with position, employer, and dates.
+        Supports Dutch and English formats.
+
+        Args:
+            text: Work experience section text
+
+        Returns:
+            List of WorkExperience objects
+        """
         experiences = []
 
-        if text.strip():
-            exp = WorkExperience(description=text.strip()[:1000])
-            experiences.append(exp)
+        # Split text into potential entries by looking for date ranges
+        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present/Heden
+        months_en = r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
+        months_nl = r"(?:januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec)"
+        present_keywords = r"(?:Present|present|Current|current|Heden|heden|Nu|nu)"
+
+        date_range_pattern = f"((?:{months_en}|{months_nl})\\s+\\d{{4}})\\s*[-–—]\\s*((?:{months_en}|{months_nl})\\s+\\d{{4}}|{present_keywords})"
+
+        entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
+
+        # Process entries
+        # After split: [text_before_1, start1, end1, text_after_1, start2, end2, text_after_2, ...]
+        i = 0
+        while i < len(entries):
+            # Check if this position starts a date pattern: text, start_date, end_date, content_after
+            if i + 3 <= len(entries):
+                before_text = entries[i].strip()
+                start_date_str = (
+                    entries[i + 1].strip() if i + 1 < len(entries) else None
+                )
+                end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
+                content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
+
+                # Check if we have valid date strings
+                if start_date_str and end_date_str and before_text:
+                    # Must have some text before dates (position/company)
+                    if len(before_text) < 5:
+                        i += 1
+                        continue
+
+                    exp = WorkExperience()
+
+                    # Parse dates
+                    exp.start_date = self._parse_date(start_date_str)
+                    if any(
+                        keyword in end_date_str.lower()
+                        for keyword in ["heden", "present", "current", "nu"]
+                    ):
+                        exp.current = True
+                        exp.end_date = None
+                    else:
+                        exp.end_date = self._parse_date(end_date_str)
+
+                    # Extract position and employer from text before dates
+                    lines_before = [
+                        line.strip() for line in before_text.split("\n") if line.strip()
+                    ]
+
+                    # Take last 1-2 lines as position/company
+                    if lines_before:
+                        if len(lines_before) >= 2:
+                            potential_position = lines_before[-2]
+                            potential_company = lines_before[-1]
+
+                            # Handle Dutch patterns "bij Company" or "voor Company"
+                            bij_match = re.search(
+                                r"(bij|voor|at)\s+(.+)",
+                                potential_company,
+                                re.IGNORECASE,
+                            )
+                            if bij_match:
+                                exp.employer = bij_match.group(2).strip()
+                                exp.position = potential_position
+                            else:
+                                exp.position = potential_position
+                                exp.employer = potential_company
+
+                            # Detect seniority levels
+                            seniority_levels = [
+                                "Senior",
+                                "Junior",
+                                "Lead",
+                                "Principal",
+                                "Staff",
+                                "Chief",
+                            ]
+                            _ = any(
+                                level in exp.position
+                                for level in seniority_levels
+                                if exp.position
+                            )
+
+                            # Detect contractor roles
+                            contractor_keywords = [
+                                "Freelance",
+                                "Contractor",
+                                "Zelfstandig",
+                                "Zzp",
+                                "ZZP",
+                                "Consultant",
+                            ]
+                            is_contractor = any(
+                                kw in exp.position or kw in potential_company
+                                for kw in contractor_keywords
+                            )
+                            if is_contractor and exp.position:
+                                # Prepend to description if not already there
+                                if not any(
+                                    kw.lower() in exp.position.lower()
+                                    for kw in contractor_keywords
+                                ):
+                                    exp.description = (
+                                        f"Contractor role. {exp.description or ''}"
+                                    )
+
+                        elif len(lines_before) == 1:
+                            # Only one line - use it as position
+                            exp.position = lines_before[-1]
+
+                    # Extract description from content after dates
+                    # Take first few lines or up to next date pattern
+                    desc_lines = [
+                        line.strip()
+                        for line in content_after.split("\n")[:5]
+                        if line.strip()
+                    ]
+                    if desc_lines:
+                        exp.description = "\n".join(desc_lines)
+
+                    experiences.append(exp)
+
+                    # Move to next potential entry (skip the date parts we just processed)
+                    i += 4
+                else:
+                    i += 1
+            else:
+                i += 1
 
         return experiences
 
+    def _parse_date(self, date_str: str) -> Optional[date]:
+        """Parse date string to date object.
+
+        Supports various formats including Dutch month names.
+
+        Args:
+            date_str: Date string (e.g., "January 2020", "januari 2020")
+
+        Returns:
+            date object or None if parsing fails
+        """
+        if not date_str:
+            return None
+
+        date_str = date_str.strip()
+
+        # Check for present keywords - use word boundaries to avoid false matches
+        for kw in self.PRESENT_KEYWORDS:
+            if re.search(rf"\b{re.escape(kw)}\b", date_str, re.IGNORECASE):
+                return None
+
+        # Try various date formats - English first
+        english_formats = [
+            "%B %Y",  # January 2020
+            "%b %Y",  # Jan 2020
+            "%Y-%m-%d",  # 2020-01-15
+            "%Y",  # 2020
+        ]
+
+        for fmt in english_formats:
+            try:
+                parsed = datetime.strptime(date_str, fmt)
+                return parsed.date()
+            except ValueError:
+                continue
+
+        # Try Dutch months by normalizing to numbers
+        date_str_lower = date_str.lower()
+        for dutch_month, month_num in self.DUTCH_MONTHS.items():
+            if dutch_month in date_str_lower:
+                # Replace Dutch month with month number
+                date_str = re.sub(
+                    rf"\b{dutch_month}\b", month_num, date_str, flags=re.IGNORECASE
+                )
+                # Try month + year format
+                try:
+                    parsed = datetime.strptime(date_str, "%m %Y")
+                    return parsed.date()
+                except ValueError:
+                    pass
+                break
+
+        # If all else fails, try to extract just the year
+        year_match = re.search(r"\b(19|20)\d{2}\b", date_str)
+        if year_match:
+            year = int(year_match.group())
+            return date(year, 1, 1)
+
+        return None
+
     def _extract_education(self, text: str) -> list[Education]:
-        """Extract education entries."""
+        """Extract education entries with multi-year range support.
+
+        Args:
+            text: Education section text
+
+        Returns:
+            List of Education objects
+        """
         education_list = []
+        lines = text.split("\n")
 
-        if text.strip():
-            edu = Education(description=text.strip()[:1000])
-            education_list.append(edu)
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped or len(line_stripped) < 10:
+                continue
 
-        return education_list
+            # Look for year ranges: 2013 – 2015
+            date_match = re.search(r"(\d{4})\s*[–—-]\s*(\d{4})", line_stripped)
+
+            if date_match:
+                edu = Education()
+                start_year = int(date_match.group(1))
+                end_year = int(date_match.group(2))
+
+                edu.start_date = date(start_year, 9, 1)
+                edu.end_date = date(end_year, 6, 30)
+
+                # Rest of line is title/organization
+                remaining = line_stripped[date_match.end() :].strip()
+                # Remove leading tab/space chars
+                remaining = re.sub(r"^\s+", "", remaining)
+
+                if remaining:
+                    # Try to split by comma or "at"
+                    if "," in remaining:
+                        parts = remaining.split(",", 1)
+                        edu.title = parts[0].strip()
+                        if len(parts) > 1:
+                            edu.organization = parts[1].strip()
+                    else:
+                        edu.title = remaining
+
+                education_list.append(edu)
+
+        return education_list if education_list else []
+
+    def _extract_certifications(self, text: str) -> list[Certification]:
+        """Extract certification entries.
+
+        Args:
+            text: Certifications section text
+
+        Returns:
+            List of Certification objects
+        """
+        certifications = []
+        lines = text.split("\n")
+
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped or len(line_stripped) < 5:
+                continue
+
+            # Skip section headers and noise
+            if line_stripped.lower() in [
+                "training",
+                "certificering",
+                "certifications",
+                "certificates",
+            ] or re.match(r"^en\s+certificering:?$", line_stripped, re.IGNORECASE):
+                continue
+
+            # Extract year at the start: 2020\tCertification Name
+            year_match = re.match(r"^(\d{4})\s+(.+)$", line_stripped)
+            if year_match:
+                year = int(year_match.group(1))
+                cert_name = year_match.group(2).strip()
+                if cert_name:  # Only create if we have a name
+                    # Create certification with optional date
+                    try:
+                        cert = Certification(name=cert_name, date=date(year, 1, 1))
+                    except Exception:
+                        # Fallback without date if validation fails
+                        cert = Certification(name=cert_name)
+                    certifications.append(cert)
+            else:
+                # No year found, just use the line as name
+                if line_stripped:
+                    cert = Certification(name=line_stripped)
+                    certifications.append(cert)
+
+        return certifications
 
     def _extract_languages(self, text: str) -> list[Language]:
-        """Extract language skills."""
+        """Extract language skills with proficiency inference.
+
+        Args:
+            text: Languages section text
+
+        Returns:
+            List of Language objects
+        """
         languages = []
 
         language_names = [
             "English",
+            "Engels",  # Dutch for English
             "Dutch",
+            "Nederlands",
             "German",
+            "Duits",  # Dutch
             "French",
+            "Frans",  # Dutch
             "Spanish",
+            "Spaans",  # Dutch
             "Italian",
+            "Italiaans",  # Dutch
             "Portuguese",
             "Chinese",
             "Japanese",
@@ -247,40 +738,138 @@ class DOCXExtractor(ResumeExtractor):
             "Arabic",
         ]
 
+        # CEFR levels
         cefr_pattern = r"\b([A-C][1-2])\b"
+
+        # Language name normalization (Dutch to English)
+        language_normalize = {
+            "engels": "English",
+            "nederlands": "Dutch",
+            "duits": "German",
+            "frans": "French",
+            "spaans": "Spanish",
+            "italiaans": "Italian",
+        }
+
+        # Proficiency keywords
+        proficiency_map = {
+            "native": "C2",
+            "moedertaal": "C2",
+            "mother tongue": "C2",
+            "bilingual": "C2",
+            "fluent": "C2",
+            "vloeiend": "C2",
+            "zeer goed": "C1",  # very good
+            "goed": "B2",  # good
+            "redelijk": "B1",  # reasonable
+            "basic": "A2",
+            "elementary": "A1",
+        }
 
         for lang in language_names:
             if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
-                language = Language(language=lang)
+                # Normalize language name to English
+                lang_normalized = language_normalize.get(lang.lower(), lang)
+                language = Language(language=lang_normalized)
 
-                context = text[
-                    max(0, text.lower().find(lang.lower()) - 50) : text.lower().find(
-                        lang.lower()
-                    )
-                    + 100
-                ]
-                cefr_match = re.search(cefr_pattern, context)
-                if cefr_match:
-                    level = cefr_match.group(1)
-                    language.listening = level
-                    language.reading = level
-                    language.speaking = level
-                    language.writing = level
+                # Find context around language name
+                lang_pos = text.lower().find(lang.lower())
+                if lang_pos >= 0:
+                    context = text[max(0, lang_pos - 50) : lang_pos + 150]
+
+                    # Check for native language
+                    is_native = False
+                    for keyword in ["native", "moedertaal", "mother tongue"]:
+                        if keyword in context.lower():
+                            language.is_native = True
+                            language.listening = "C2"
+                            language.reading = "C2"
+                            language.speaking = "C2"
+                            language.writing = "C2"
+                            is_native = True
+                            break
+
+                    if not is_native:
+                        # Try CEFR level
+                        cefr_match = re.search(cefr_pattern, context)
+                        if cefr_match:
+                            level = cefr_match.group(1)
+                            language.listening = level
+                            language.reading = level
+                            language.speaking = level
+                            language.writing = level
+                        else:
+                            # Try proficiency keywords
+                            for keyword, level in proficiency_map.items():
+                                if keyword in context.lower():
+                                    if keyword in [
+                                        "native",
+                                        "moedertaal",
+                                        "mother tongue",
+                                    ]:
+                                        language.is_native = True
+                                    language.listening = level
+                                    language.reading = level
+                                    language.speaking = level
+                                    language.writing = level
+                                    break
 
                 languages.append(language)
 
         return languages
 
     def _extract_skills(self, text: str) -> list[Skill]:
-        """Extract skills."""
-        skills = []
+        """Extract skills with filtering.
 
-        skill_items = re.split(r"[,•\n]", text)
+        Args:
+            text: Skills section text
+
+        Returns:
+            List of Skill objects
+        """
+        skills = []
+        seen_skills = set()
+
+        # Split by common delimiters
+        skill_items = re.split(r"[,•\n·|]", text)
+
+        # Noise words to skip
+        noise_words = {
+            "skills",
+            "expertise",
+            "software",
+            "kennis",  # Dutch: knowledge
+            "vaardigheden",  # Dutch: skills
+            "and",
+            "or",
+            "including",
+            "etc",
+        }
 
         for item in skill_items:
             item = item.strip()
-            if item and len(item) > 2 and len(item) < 100:
-                skill = Skill(name=item)
-                skills.append(skill)
+            if not item or len(item) < 2 or len(item) > 80:
+                continue
+
+            # Skip if just numbers
+            if re.match(r"^[\d\s\-/]+$", item):
+                continue
+
+            # Skip noise words
+            if item.lower() in noise_words:
+                continue
+
+            # Skip page numbers
+            if re.search(r"^page\s+\d+$", item, re.IGNORECASE):
+                continue
+
+            # Normalize for duplicate detection
+            normalized = re.sub(r"[^\w]", "", item.lower())
+            if normalized in seen_skills:
+                continue
+
+            seen_skills.add(normalized)
+            skill = Skill(name=item)
+            skills.append(skill)
 
         return skills

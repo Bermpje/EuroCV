@@ -277,11 +277,50 @@ class LinkedInPDFExtractor(ResumeExtractor):
         if email_matches:
             info.email = email_matches[0]
 
-        # Extract phone
-        phone_pattern = r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}"
-        phone_matches = re.findall(phone_pattern, text[:500])  # Look in first 500 chars
+        # Extract phone (A3: Enhanced patterns)
+        phone_patterns = [
+            # International with (0) notation: +31 (0)6 12345678
+            r"\+\d{1,3}\s*\(0\)\s*\d{1,3}\s*\d{6,8}",
+            # International standard: +31-6-12345678, +31 6 12345678
+            r"\+\d{1,3}[-\s]?\d{1,3}[-\s]?\d{6,8}",
+            # Dutch mobile: 06-12345678, 0612345678
+            r"0\d{1}[-\s]?\d{8}",
+            # Dutch landline with area code: (020) 1234567, 020-1234567
+            r"\(?\d{2,4}\)?[-\s]?\d{6,7}",
+            # US format: (555) 123-4567, +1 (555) 123-4567
+            r"\+?1?\s*\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}",
+            # UK format: +44 20 1234 5678
+            r"\+44\s*\d{2,4}\s*\d{4}\s*\d{4}",
+            # Generic international
+            r"[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}",
+        ]
+
+        # Look in first 500 chars for phone in header/contact section
+        phone_matches = []
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, text[:500])
+            phone_matches.extend(matches)
+
         if phone_matches:
-            info.phone = phone_matches[0]
+            # Filter out years (4 digits only) and validate length
+            valid_phones = []
+            for p in phone_matches:
+                clean_phone = (
+                    p.replace(" ", "")
+                    .replace("-", "")
+                    .replace(".", "")
+                    .replace("(", "")
+                    .replace(")", "")
+                )
+                # Skip if it's just a 4-digit year
+                if re.match(r"^\d{4}$", clean_phone):
+                    continue
+                # Keep if it's a reasonable phone length (6-15 digits)
+                if 6 <= len(re.sub(r"\D", "", clean_phone)) <= 15:
+                    valid_phones.append(p)
+
+            if valid_phones:
+                info.phone = valid_phones[0]
 
         # Extract name (improved heuristic)
         info.first_name, info.last_name = self._extract_name(text)
@@ -416,7 +455,7 @@ class LinkedInPDFExtractor(ResumeExtractor):
         return None, None
 
     def _extract_location_from_header(self, text: str) -> tuple[str, str]:
-        """Extract location (city, country) from resume header.
+        """Extract location (city, country) from resume header (A4: Enhanced).
 
         Args:
             text: Resume text
@@ -436,9 +475,37 @@ class LinkedInPDFExtractor(ResumeExtractor):
             if not line or "http" in line.lower() or "@" in line:
                 continue
 
+            # Handle "Area" patterns (e.g., "Amsterdam Area", "Greater London")
+            area_match = re.search(
+                r"([\w\s]+)\s+(Area|Greater|Region)", line, re.IGNORECASE
+            )
+            if area_match:
+                city = area_match.group(1).strip()
+                if len(city) > 2 and len(city) < 30:
+                    return city, None
+
+            # Handle "Remote -" patterns (e.g., "Remote - Netherlands")
+            remote_match = re.search(r"Remote\s*[-–]\s*([\w\s]+)", line, re.IGNORECASE)
+            if remote_match:
+                location = remote_match.group(1).strip()
+                # Could be a country
+                countries = [
+                    "Netherlands",
+                    "Germany",
+                    "Belgium",
+                    "France",
+                    "United Kingdom",
+                    "UK",
+                    "United States",
+                    "USA",
+                ]
+                for country in countries:
+                    if country.lower() in location.lower():
+                        return "Remote", country
+
             # Look for lines with comma-separated location info
             if "," in line:
-                # Common country names and variations
+                # Common country names and variations (A4: Expanded)
                 countries = [
                     "Netherlands",
                     "Holland",
@@ -455,6 +522,11 @@ class LinkedInPDFExtractor(ResumeExtractor):
                     "Poland",
                     "Sweden",
                     "Denmark",
+                    "Austria",
+                    "Switzerland",
+                    "Ireland",
+                    "Canada",
+                    "Australia",
                 ]
 
                 # Check if any country is mentioned
@@ -467,6 +539,32 @@ class LinkedInPDFExtractor(ResumeExtractor):
                             # Verify city looks reasonable (not too long, not just numbers)
                             if len(city) > 2 and len(city) < 30 and not city.isdigit():
                                 return city, country
+
+        # Check for standalone city names (A4: Expanded city list)
+        major_cities = {
+            # Dutch cities
+            "Amsterdam": "Netherlands",
+            "Rotterdam": "Netherlands",
+            "Den Haag": "Netherlands",
+            "Utrecht": "Netherlands",
+            "Eindhoven": "Netherlands",
+            "Groningen": "Netherlands",
+            # International cities
+            "London": "United Kingdom",
+            "Berlin": "Germany",
+            "Paris": "France",
+            "Brussels": "Belgium",
+            "New York": "USA",
+            "San Francisco": "USA",
+        }
+
+        for line in lines[:50]:
+            line_clean = line.strip()
+            for city, country in major_cities.items():
+                if city.lower() in line_clean.lower():
+                    # Check if this is likely a location (not part of company name)
+                    if len(line_clean) < 50:  # Short line = likely just location
+                        return city, country
 
         return None, None
 

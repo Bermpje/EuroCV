@@ -1,5 +1,6 @@
 """Tests for Generic PDF extractor with multi-language support."""
 
+from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -792,3 +793,417 @@ def test_section_splitting_sidebar_handling(extractor):
     assert "experience" in sections
     assert "language" in sections
     assert "education" in sections
+
+
+def test_extract_skills_with_section_headers(extractor):
+    """Test skills extraction filters out section headers."""
+    text = """
+    SKILLS
+    Python
+    Java
+    Skills
+    JavaScript
+    VAARDIGHEDEN
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should not include section headers
+    assert "skills" not in skill_names
+    assert "vaardigheden" not in skill_names
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("java" in name for name in skill_names)
+
+
+def test_extract_skills_compound_with_slashes(extractor):
+    """Test skills extraction handles compound skills with slashes."""
+    text = "CI/CD, HTML/CSS, Git/GitHub, REST APIs"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    assert any("CI/CD" in name for name in skill_names)
+    assert any("HTML/CSS" in name for name in skill_names)
+    assert any("Git" in name or "GitHub" in name for name in skill_names)
+
+
+def test_extract_skills_with_numbers(extractor):
+    """Test skills extraction handles skills with version numbers."""
+    text = "Python3, Java8, Angular 12, Node.js 16"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should include skills with numbers (but not mostly numbers)
+    assert any("Python" in name for name in skill_names)
+    assert len(skills) >= 2
+
+
+def test_extract_skills_filter_job_descriptions(extractor):
+    """Test skills extraction filters out job description phrases."""
+    text = """
+    Python
+    Java
+    Responsible for developing applications
+    Experience with cloud platforms
+    JavaScript
+    Working with agile teams
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should filter out description phrases
+    assert not any("responsible for" in name for name in skill_names)
+    assert not any("experience with" in name for name in skill_names)
+    assert not any("working with" in name for name in skill_names)
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("javascript" in name for name in skill_names)
+
+
+def test_extract_skills_filter_date_ranges(extractor):
+    """Test skills extraction filters out date ranges."""
+    text = """
+    Python
+    2019 - 2023
+    Java
+    Jan 2020 - Dec 2022
+    JavaScript
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should not include date ranges
+    assert not any("2019" in name for name in skill_names)
+    assert not any("2023" in name for name in skill_names)
+    assert not any("Jan" in name and "2020" in name for name in skill_names)
+    # Should include actual skills
+    assert len(skills) >= 2
+
+
+def test_extract_skills_compound_with_parentheses(extractor):
+    """Test skills extraction handles skills with parentheses."""
+    text = "Python (Django), React (Hooks), AWS (EC2/S3)"
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    assert any("Django" in name for name in skill_names)
+    assert len(skills) >= 2
+
+
+def test_extract_skills_filter_long_sentences(extractor):
+    """Test skills extraction filters out full sentences."""
+    text = """
+    Python
+    Experienced developer with strong background in full stack development and cloud architecture
+    JavaScript
+    Docker
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name for s in skills]
+    # Should not include the long sentence
+    assert not any(
+        len(name.split()) > 10 for name in skill_names
+    ), "Should filter long sentences"
+    # Should include actual skills
+    assert any("python" in name.lower() for name in skill_names)
+
+
+def test_extract_skills_enhanced_noise_filtering(extractor):
+    """Test enhanced noise word filtering."""
+    text = """
+    Python
+    Technical
+    Java
+    Expertise
+    JavaScript
+    Programming
+    Docker
+    Software
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should filter enhanced noise words
+    assert "technical" not in skill_names
+    assert "expertise" not in skill_names
+    assert "programming" not in skill_names
+    assert "software" not in skill_names
+    # Should include actual skills
+    assert any("python" in name for name in skill_names)
+    assert any("docker" in name for name in skill_names)
+
+
+def test_extract_certifications_without_keywords(extractor):
+    """Test certification extraction without standard keywords."""
+    text = """
+    ISO 9001 Quality Management
+    ITIL v4 Service Management
+    PMP Project Management
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name for c in certs]
+    assert len(certs) >= 2
+    assert any("ISO" in name for name in cert_names)
+    assert any("ITIL" in name for name in cert_names)
+
+
+def test_extract_certifications_with_issuer(extractor):
+    """Test certification extraction with issuer information."""
+    text = """
+    Advanced Python Programming from Coursera
+    Cloud Architecture by AWS
+    Data Science Certification (Google)
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name for c in certs]
+    assert len(certs) >= 2
+    assert any("Coursera" in name for name in cert_names)
+    assert any("AWS" in name or "Cloud" in name for name in cert_names)
+
+
+def test_extract_certifications_with_credential_ids(extractor):
+    """Test certification extraction with credential IDs."""
+    text = """
+    AWS Solutions Architect #ABC123
+    Azure Administrator ID: XYZ789
+    Scrum Master Credential: SM-2023-456
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("AWS" in name for name in cert_names)
+
+
+def test_extract_certifications_with_validity(extractor):
+    """Test certification extraction with validity periods."""
+    text = """
+    ISO 27001 Lead Auditor valid until 2025
+    PMP Certification valid through 2024
+    Agile Coach valid to 2026
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("ISO" in name for name in cert_names)
+    assert any("PMP" in name or "Agile" in name for name in cert_names)
+
+
+def test_extract_certifications_dutch_formats(extractor):
+    """Test certification extraction with Dutch formats."""
+    text = """
+    Vertrouwenspersoon Cursus 2022
+    Change Management Opleiding
+    Agile Coach Specialist Training
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 2
+    cert_names = [c.name for c in certs]
+    assert any("Vertrouwenspersoon" in name or "Cursus" in name for name in cert_names)
+
+
+def test_extract_certifications_with_old_years(extractor):
+    """Test certification extraction supports years before 2000."""
+    text = """
+    First Aid Certification 1995
+    Driver's License 1998
+    Teaching Diploma 1999
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    assert len(certs) >= 1
+    # Check if dates were extracted
+    certs_with_dates = [c for c in certs if c.date is not None]
+    if certs_with_dates:
+        assert any(c.date.year < 2000 for c in certs_with_dates)
+
+
+def test_extract_certifications_acronyms(extractor):
+    """Test certification extraction recognizes acronyms."""
+    text = """
+    PMP
+    CISSP
+    ITIL Foundation
+    TOGAF 9
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    # Should recognize acronyms as potential certifications
+    assert len(certs) >= 2
+
+
+def test_extract_certifications_filter_section_headers(extractor):
+    """Test certification extraction filters section headers."""
+    text = """
+    CERTIFICATIONS
+    AWS Certified Developer
+    Page 3
+    Licenses
+    Scrum Master Certification
+    """
+
+    certs = extractor._extract_certifications(text)
+
+    cert_names = [c.name.lower() for c in certs]
+    # Should not include section headers
+    assert not any("certifications" == name for name in cert_names)
+    assert not any("page" in name for name in cert_names)
+    assert not any("licenses" == name for name in cert_names)
+    # Should include actual certifications
+    assert any("aws" in name for name in cert_names)
+
+
+# Phase A Tests: Quick Wins
+
+
+def test_extract_skills_filter_page_numbers(extractor):
+    """Test A1: Skills extraction filters 'Page X' patterns."""
+    text = """
+    Python
+    JavaScript
+    Page 2
+    Docker
+    Page 3
+    React
+    """
+
+    skills = extractor._extract_skills(text)
+
+    skill_names = [s.name.lower() for s in skills]
+    # Should not include page numbers
+    assert not any("page" in name for name in skill_names)
+    # Should include actual skills
+    assert "python" in skill_names
+    assert "javascript" in skill_names
+    assert "docker" in skill_names
+
+
+def test_extract_personal_info_dutch_phone_formats(extractor):
+    """Test A3: Phone extraction handles various Dutch formats."""
+    test_cases = [
+        ("+31 (0)6 12345678", "+31 (0)6 12345678"),
+        ("06-12345678", "06-12345678"),
+        ("0612345678", "0612345678"),
+        ("(020) 1234567", "(020) 1234567"),
+        ("020-1234567", "020-1234567"),
+    ]
+
+    for test_phone, expected in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {test_phone}
+        Amsterdam, Netherlands
+        """
+
+        info = extractor._extract_personal_info(text)
+        assert info.phone is not None, f"Failed to extract {test_phone}"
+        # Normalize for comparison
+        assert info.phone.replace(" ", "").replace("-", "") in test_phone.replace(
+            " ", ""
+        ).replace("-", "")
+
+
+def test_extract_personal_info_international_phone_formats(extractor):
+    """Test A3: Phone extraction handles international formats."""
+    test_cases = [
+        ("+44 20 1234 5678", "UK"),
+        ("+1 (555) 123-4567", "US"),
+        ("+31-6-12345678", "NL"),
+    ]
+
+    for test_phone, label in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {test_phone}
+        Some City, Country
+        """
+
+        info = extractor._extract_personal_info(text)
+        assert info.phone is not None, f"Failed to extract {label} phone: {test_phone}"
+
+
+def test_extract_location_area_patterns(extractor):
+    """Test A4: Location extraction handles Area/Greater/Remote patterns."""
+    test_cases = [
+        ("Amsterdam Area", "Amsterdam", None),
+        ("Greater London", "London", None),  # Will match "London" from the city list
+        ("Remote - Netherlands", "Remote", "Netherlands"),
+    ]
+
+    for location_text, expected_city, expected_country in test_cases:
+        text = f"""
+        John Doe
+        john@example.com
+        {location_text}
+        """
+
+        city, country = extractor._extract_location_from_header(text)
+        assert city is not None, f"Failed to extract city from: {location_text}"
+        assert (
+            expected_city.lower() in city.lower()
+        ), f"Expected {expected_city}, got {city}"
+        if expected_country:
+            assert country is not None
+            assert expected_country.lower() in country.lower()
+
+
+def test_extract_location_expanded_cities(extractor):
+    """Test A4: Location extraction recognizes expanded city list."""
+    dutch_cities = ["Rotterdam", "Utrecht", "Eindhoven", "Groningen", "Breda"]
+    intl_cities = ["London", "Berlin", "Paris", "Brussels", "Munich"]
+
+    for city in dutch_cities + intl_cities:
+        text = f"""
+        Jane Smith
+        jane@example.com
+        {city}
+        Senior Developer
+        """
+
+        extracted_city, country = extractor._extract_location_from_header(text)
+        if extracted_city:  # Some short texts may not be recognized
+            assert city.lower() in extracted_city.lower(), f"Failed to extract {city}"
+
+
+def test_parse_date_dutch_variants(extractor):
+    """Test A2: Date parsing handles Dutch month abbreviations and variants."""
+    test_cases = [
+        "jan 2023",  # Abbreviated month
+        "mrt 2024",  # Dutch-specific abbreviation
+        "vanaf jan 2020",  # "from"
+        "sinds 2019",  # "since"
+        "tot heden",  # "until present"
+        "tot nu",  # "until now"
+    ]
+
+    for date_str in test_cases:
+        # parse_date should handle these without raising an exception
+        result = extractor._parse_date(date_str)
+        # If it's a "present" variant, should return None (ongoing)
+        # If it's a proper date, should return a date object
+        # Either is acceptable - just shouldn't crash
+        assert result is None or isinstance(result, date), f"Failed on: {date_str}"
