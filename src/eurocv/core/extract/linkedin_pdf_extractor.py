@@ -993,10 +993,43 @@ class LinkedInPDFExtractor(ResumeExtractor):
 
                     # Check if first line is a location
                     if after_lines and self._looks_like_location(after_lines[0]):
-                        location_parts = after_lines[0].split(",")
+                        location_line = after_lines[0]
+                        location_parts = location_line.split(",")
+
                         if len(location_parts) >= 2:
+                            # Format: "City, Country" or "City, Region, Country"
                             exp.city = location_parts[0].strip()
                             exp.country = location_parts[-1].strip()
+                        else:
+                            # Single location word - check if it's a known country
+                            country_keywords = [
+                                "Netherlands",
+                                "Holland",
+                                "Germany",
+                                "Belgium",
+                                "France",
+                                "UK",
+                                "United Kingdom",
+                                "USA",
+                                "United States",
+                                "Spain",
+                                "Italy",
+                                "Portugal",
+                                "Poland",
+                                "Sweden",
+                                "Denmark",
+                                "Austria",
+                                "Switzerland",
+                                "Ireland",
+                                "Canada",
+                                "Australia",
+                            ]
+                            for keyword in country_keywords:
+                                if keyword.lower() in location_line.lower():
+                                    exp.country = keyword
+                                    break
+
+                        # Only remove the line after we've processed it
                         after_lines = after_lines[1:]
 
                     # Remaining lines are description
