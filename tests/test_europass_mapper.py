@@ -431,3 +431,68 @@ def test_map_skills_without_categories():
     # Should still map to Computer skills by default
     skills = data["LearnerInfo"]["Skills"]
     assert "Computer" in skills
+
+
+def test_map_dates_on_first_of_month():
+    """Test that dates on the 1st of the month are correctly mapped with day included.
+
+    Regression test for bug where day=1 was incorrectly omitted,
+    treating it as default/missing data instead of a valid date.
+    """
+    resume = Resume(
+        personal_info=PersonalInfo(
+            first_name="Test",
+            last_name="User",
+            date_of_birth=date(1990, 1, 1),  # January 1st, 1990
+        ),
+        work_experience=[
+            WorkExperience(
+                position="Developer",
+                employer="Test Corp",
+                start_date=date(2020, 1, 1),  # Started on January 1st
+                end_date=date(2023, 12, 1),  # Ended on December 1st
+            )
+        ],
+        education=[
+            Education(
+                title="Bachelor",
+                organization="University",
+                start_date=date(2016, 9, 1),  # Started on September 1st
+                end_date=date(2020, 6, 1),  # Ended on June 1st
+            )
+        ],
+    )
+
+    mapper = EuropassMapper()
+    europass = mapper.map(resume)
+    data = europass.to_json()
+
+    # Birth date should include day 1
+    birthdate = data["LearnerInfo"]["Identification"]["Demographics"]["Birthdate"]
+    assert birthdate["Year"] == 1990
+    assert birthdate["Month"] == 1
+    assert birthdate["Day"] == 1, "Day 1 should be included in birth date"
+
+    # Work experience dates should include day 1
+    work_period = data["LearnerInfo"]["WorkExperience"][0]["Period"]
+    assert work_period["From"]["Year"] == 2020
+    assert work_period["From"]["Month"] == 1
+    assert (
+        work_period["From"]["Day"] == 1
+    ), "Day 1 should be included in work start date"
+    assert work_period["To"]["Year"] == 2023
+    assert work_period["To"]["Month"] == 12
+    assert work_period["To"]["Day"] == 1, "Day 1 should be included in work end date"
+
+    # Education dates should include day 1
+    edu_period = data["LearnerInfo"]["Education"][0]["Period"]
+    assert edu_period["From"]["Year"] == 2016
+    assert edu_period["From"]["Month"] == 9
+    assert (
+        edu_period["From"]["Day"] == 1
+    ), "Day 1 should be included in education start date"
+    assert edu_period["To"]["Year"] == 2020
+    assert edu_period["To"]["Month"] == 6
+    assert (
+        edu_period["To"]["Day"] == 1
+    ), "Day 1 should be included in education end date"

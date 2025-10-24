@@ -144,8 +144,8 @@ class EuropassMapper:
             birthdate: dict[str, Any] = {"Year": pi.date_of_birth.year}
             if pi.date_of_birth.month:
                 birthdate["Month"] = pi.date_of_birth.month
-            if pi.date_of_birth.day and pi.date_of_birth.day != 1:
-                birthdate["Day"] = pi.date_of_birth.day
+            # Always include day since date objects always have a day (1-31)
+            birthdate["Day"] = pi.date_of_birth.day
             demographics["Birthdate"] = birthdate
 
         if pi.nationality:
@@ -181,20 +181,18 @@ class EuropassMapper:
         period: dict[str, Any] = {}
         if exp.start_date:
             from_date: dict[str, Any] = {"Year": exp.start_date.year}
-            # Only include month if we have meaningful month data (not just default day 1)
             if exp.start_date.month:
                 from_date["Month"] = exp.start_date.month
-            # Only include day if it's meaningful (not just default day 1 from month-only data)
-            if exp.start_date.day and exp.start_date.day != 1:
-                from_date["Day"] = exp.start_date.day
+            # Always include day since date objects always have a day (1-31)
+            from_date["Day"] = exp.start_date.day
             period["From"] = from_date
 
         if exp.end_date:
             to_date: dict[str, Any] = {"Year": exp.end_date.year}
             if exp.end_date.month:
                 to_date["Month"] = exp.end_date.month
-            if exp.end_date.day and exp.end_date.day != 1:
-                to_date["Day"] = exp.end_date.day
+            # Always include day since date objects always have a day (1-31)
+            to_date["Day"] = exp.end_date.day
             period["To"] = to_date
         elif exp.current:
             period["Current"] = True
@@ -258,16 +256,16 @@ class EuropassMapper:
             from_date: dict[str, Any] = {"Year": edu.start_date.year}
             if edu.start_date.month:
                 from_date["Month"] = edu.start_date.month
-            if edu.start_date.day and edu.start_date.day != 1:
-                from_date["Day"] = edu.start_date.day
+            # Always include day since date objects always have a day (1-31)
+            from_date["Day"] = edu.start_date.day
             period["From"] = from_date
 
         if edu.end_date:
             to_date: dict[str, Any] = {"Year": edu.end_date.year}
             if edu.end_date.month:
                 to_date["Month"] = edu.end_date.month
-            if edu.end_date.day and edu.end_date.day != 1:
-                to_date["Day"] = edu.end_date.day
+            # Always include day since date objects always have a day (1-31)
+            to_date["Day"] = edu.end_date.day
             period["To"] = to_date
         elif edu.current:
             period["Current"] = True
@@ -342,8 +340,8 @@ class EuropassMapper:
             achievement["Date"] = {"Year": cert.date.year}
             if cert.date.month:
                 achievement["Date"]["Month"] = cert.date.month
-            if cert.date.day and cert.date.day != 1:
-                achievement["Date"]["Day"] = cert.date.day
+            # Always include day since date objects always have a day (1-31)
+            achievement["Date"]["Day"] = cert.date.day
 
         # Issuer (if available)
         if hasattr(cert, "issuer") and cert.issuer:
