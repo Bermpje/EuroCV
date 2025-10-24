@@ -225,6 +225,11 @@ class LinkedInPDFExtractor(ResumeExtractor):
         # Extract personal info
         resume.personal_info = self._extract_personal_info(text)
 
+        # LinkedIn PDFs have sidebar content at the beginning
+        # Extract sidebar content first (Top Skills, Languages, Certifications)
+        sidebar_skills = self._extract_sidebar_skills(text)
+        sidebar_certs = self._extract_sidebar_certifications(text)
+
         # Extract sections
         sections = self._split_into_sections(text)
 
@@ -244,21 +249,195 @@ class LinkedInPDFExtractor(ResumeExtractor):
             # Try extracting from full text (languages might be in sidebar)
             resume.languages = self._extract_languages(text)
 
-        # Extract skills
+        # Extract skills - combine sidebar skills with section skills
+        section_skills = []
         if "skill" in sections:
-            resume.skills = self._extract_skills(sections["skill"])
+            section_skills = self._extract_skills(sections["skill"])
 
-        # Extract certifications
+        # Also look for "Specialisms" section for additional skills
+        if "summary" in sections or "profile" in sections:
+            summary_text = sections.get("summary") or sections.get("profile", "")
+            if "specialism" in summary_text.lower():
+                specialism_skills = self._extract_specialisms(summary_text)
+                section_skills.extend(specialism_skills)
+
+        # Combine sidebar and section skills, removing duplicates
+        all_skills = sidebar_skills + section_skills
+        seen_skills = set()
+        unique_skills = []
+        for skill in all_skills:
+            normalized = skill.name.lower().replace(" ", "")
+            if normalized not in seen_skills:
+                seen_skills.add(normalized)
+                unique_skills.append(skill)
+        resume.skills = unique_skills
+
+        # Extract certifications - combine sidebar and section
+        section_certs = []
         if "certification" in sections:
-            resume.certifications = self._extract_certifications(
-                sections["certification"]
-            )
+            section_certs = self._extract_certifications(sections["certification"])
+
+        # Combine and deduplicate
+        all_certs = sidebar_certs + section_certs
+        seen_certs = set()
+        unique_certs = []
+        for cert in all_certs:
+            normalized = cert.name.lower().replace(" ", "")
+            if normalized not in seen_certs:
+                seen_certs.add(normalized)
+                unique_certs.append(cert)
+        resume.certifications = unique_certs
 
         # Extract summary
         if "summary" in sections or "profile" in sections:
             resume.summary = sections.get("summary") or sections.get("profile")
 
         return resume
+
+    def _extract_sidebar_skills(self, text: str) -> list[Skill]:
+        """Extract skills from LinkedIn sidebar 'Top Skills' section.
+
+        Args:
+            text: Full resume text
+
+        Returns:
+            List of Skill objects
+        """
+        skills = []
+
+        # Look for "Top Skills" header in first ~500 chars (sidebar)
+        match = re.search(
+            r"Top Skills\s*\n(.*?)(?=\n\w+\n|Languages|Certifications|$)",
+            text[:1000],
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        if match:
+            skills_text = match.group(1)
+            # Split by newlines
+            lines = [line.strip() for line in skills_text.split("\n") if line.strip()]
+
+            for line in lines:
+                # Skip section headers
+                if line.lower() in [
+                    "contact",
+                    "languages",
+                    "certifications",
+                    "summary",
+                ]:
+                    break
+
+                # Skip URLs and email
+                if "http" in line.lower() or "@" in line or "www." in line.lower():
+                    continue
+
+                # Skip if too short or too long
+                if len(line) < 3 or len(line) > 50:
+                    continue
+
+                skills.append(Skill(name=line))
+
+        return skills
+
+    def _extract_sidebar_certifications(self, text: str) -> list[Certification]:
+        """Extract certifications from LinkedIn sidebar.
+
+        Args:
+            text: Full resume text
+
+        Returns:
+            List of Certification objects
+        """
+        certifications = []
+
+        # Look for "Certifications" header in first ~1000 chars (sidebar)
+        # Stop at the person's name which is typically "FirstName LastName" pattern
+        match = re.search(
+            r"Certifications?\s*\n(.*?)(?=\n[A-Z][a-z]{2,15}\s+[A-Z][a-z]{2,15}\n.*?(?:Architect|Manager|Developer|Engineer|Consultant))",
+            text[:1200],
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        if match:
+            certs_text = match.group(1)
+            lines = [line.strip() for line in certs_text.split("\n") if line.strip()]
+
+            # Certifications can span multiple lines
+            # Lines that are NOT cert names: short connector words, numbers only, etc
+            current_cert = []
+            for line in lines:
+                # Stop if we clearly hit the name/title section
+                # (person's name followed by job title is a strong indicator)
+                if re.match(r"^[A-Z][a-z]+\s+[A-Z][a-z]+$", line):
+                    # This looks like a person's name
+                    if current_cert:
+                        cert_name = " ".join(current_cert)
+                        certifications.append(Certification(name=cert_name))
+                    break
+
+                # Skip empty lines - they separate certifications
+                if not line:
+                    if current_cert:
+                        cert_name = " ".join(current_cert)
+                        certifications.append(Certification(name=cert_name))
+                        current_cert = []
+                    continue
+
+                # Skip lines that are clearly section headers
+                if line.lower() in ["summary", "experience", "education", "contact"]:
+                    break
+
+                # Accumulate lines that belong to same certification
+                current_cert.append(line)
+
+            # Don't forget last cert
+            if current_cert:
+                cert_name = " ".join(current_cert)
+                certifications.append(Certification(name=cert_name))
+
+        return certifications
+
+    def _extract_specialisms(self, text: str) -> list[Skill]:
+        """Extract skills from 'Specialisms' section.
+
+        Args:
+            text: Summary/profile text that may contain specialisms
+
+        Returns:
+            List of Skill objects
+        """
+        skills = []
+
+        # Look for "Specialism" section
+        match = re.search(
+            r"Specialism[s]?\s*\n(.*?)(?=\n\n|Experience|$)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        if match:
+            specialisms_text = match.group(1)
+            # Split by bullet points or newlines
+            lines = re.split(r"[•\n]", specialisms_text)
+
+            for line in lines:
+                line = line.strip()
+
+                # Skip if too short
+                if len(line) < 5:
+                    continue
+
+                # Skip headers
+                if line.lower() in ["experience", "education"]:
+                    break
+
+                # Clean up the line (remove leading symbols)
+                line = re.sub(r"^[•\-\*]\s*", "", line)
+
+                if line:
+                    skills.append(Skill(name=line))
+
+        return skills
 
     def _extract_personal_info(self, text: str) -> PersonalInfo:
         """Extract personal information from text.
@@ -622,7 +801,19 @@ class LinkedInPDFExtractor(ResumeExtractor):
         return sections
 
     def _extract_work_experience(self, text: str) -> list[WorkExperience]:
-        """Extract work experience entries.
+        """Extract work experience entries from LinkedIn format.
+
+        LinkedIn uses a hierarchical format:
+        Company Name
+        Total Duration (X years Y months)
+        Position Title 1
+        Date Range 1
+        Location
+        Description...
+        Position Title 2 (same company)
+        Date Range 2
+        Location
+        Description...
 
         Args:
             text: Work experience section text
@@ -632,35 +823,89 @@ class LinkedInPDFExtractor(ResumeExtractor):
         """
         experiences = []
 
-        # Split text into potential entries by looking for date ranges
-        # Pattern: Month YYYY - Month YYYY or Month YYYY - Present
-        # More strict: require either full month name or standard abbreviation
+        # First, identify company blocks by finding duration summary lines
+        # Pattern: "X years Y months" or "X years" or "Y months" on their own line
+        duration_summary_pattern = r"^\d+\s+(?:year|years)\s+\d+\s+(?:month|months)$|^\d+\s+(?:year|years)$|^\d+\s+(?:month|months)$"
+
+        lines = text.split("\n")
+        company_blocks = []
+        current_block_start = 0
+        current_company = None
+
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+
+            # Check if this line is a duration summary
+            if re.match(duration_summary_pattern, line_stripped, re.IGNORECASE):
+                # Previous line should be the company name
+                if i > 0:
+                    potential_company = lines[i - 1].strip()
+
+                    # Validate it looks like a company name
+                    if (
+                        len(potential_company) > 3
+                        and not re.match(
+                            r"^page\s+\d+", potential_company, re.IGNORECASE
+                        )
+                        and not re.match(r"^\d+", potential_company)
+                    ):
+                        # Save previous company block if exists
+                        if current_company:
+                            company_blocks.append(
+                                {
+                                    "company": current_company,
+                                    "start_line": current_block_start,
+                                    "end_line": i - 1,
+                                    "text": "\n".join(
+                                        lines[current_block_start : i - 1]
+                                    ),
+                                }
+                            )
+
+                        # Start new company block
+                        current_company = potential_company
+                        current_block_start = i + 1  # Start after duration line
+
+        # Don't forget last company block
+        if current_company:
+            company_blocks.append(
+                {
+                    "company": current_company,
+                    "start_line": current_block_start,
+                    "end_line": len(lines),
+                    "text": "\n".join(lines[current_block_start:]),
+                }
+            )
+
+        # If no company blocks found using duration pattern, fall back to date-based splitting
+        if not company_blocks:
+            return self._extract_work_experience_fallback(text)
+
+        # Now extract positions from each company block
         date_range_pattern = r"((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)"
 
-        entries = re.split(date_range_pattern, text, flags=re.IGNORECASE)
+        for block in company_blocks:
+            company_name: str = block["company"]  # type: ignore[assignment]
+            block_text: str = block["text"]  # type: ignore[assignment]
 
-        # Process entries
-        i = 0
-        while i < len(entries):
-            # Check if we have a date range match (3 parts: before, start_date, end_date)
-            if i + 2 < len(entries):
-                before_text = entries[i].strip()
-                start_date_str = (
-                    entries[i + 1].strip() if i + 1 < len(entries) else None
-                )
-                end_date_str = entries[i + 2].strip() if i + 2 < len(entries) else None
+            # Split this company's block by date ranges to find individual positions
+            parts = re.split(date_range_pattern, block_text, 0, re.IGNORECASE)
 
-                # Get the content after the dates (description)
-                content_after = entries[i + 3].strip() if i + 3 < len(entries) else ""
+            i = 0
+            while i < len(parts):
+                if i + 3 < len(parts):
+                    before_text = parts[i].strip()
+                    start_date_str = parts[i + 1].strip()
+                    end_date_str = parts[i + 2].strip()
+                    after_text = parts[i + 3].strip()
 
-                if start_date_str and end_date_str:
-                    # Validate this looks like a real work entry (not a random date in description)
-                    # Must have some text before the dates (at least a position title)
-                    if len(before_text.strip()) < 10:
-                        i += 4
+                    # Skip if too short
+                    if len(before_text) < 5:
+                        i += 1
                         continue
 
                     exp = WorkExperience()
+                    exp.employer = company_name  # Use the identified company name
 
                     # Parse dates
                     exp.start_date = self._parse_date(start_date_str)
@@ -670,76 +915,128 @@ class LinkedInPDFExtractor(ResumeExtractor):
                     else:
                         exp.end_date = self._parse_date(end_date_str)
 
-                    # Extract position and employer from text before dates
-                    # LinkedIn format: Company / Duration / Position / Date
+                    # Extract position title (last line before date range)
                     lines_before = [
                         line.strip() for line in before_text.split("\n") if line.strip()
                     ]
                     if lines_before:
-                        # Last non-empty line before dates is usually the position
-                        exp.position = lines_before[-1] if lines_before else None
+                        # Skip duration lines
+                        position_candidates = [
+                            line
+                            for line in lines_before
+                            if not re.match(
+                                r"^\(?\d+\s+(year|month)", line, re.IGNORECASE
+                            )
+                        ]
+                        if position_candidates:
+                            exp.position = position_candidates[-1]
 
-                        # Find the employer (company name)
-                        # It's typically the FIRST line, or a line that doesn't look like duration/position
-                        if len(lines_before) >= 3:
-                            # If we have 3+ lines, first is likely company, second is duration, third is position
-                            exp.employer = lines_before[0]
-                        elif len(lines_before) == 2:
-                            # If we have 2 lines, check if second-to-last is a duration
-                            potential_employer = lines_before[-2]
-                            if not re.search(
-                                r"\d+\s+(year|month|day)",
-                                potential_employer,
-                                re.IGNORECASE,
-                            ) and not re.search(
-                                r"page\s+\d+", potential_employer, re.IGNORECASE
-                            ):
-                                exp.employer = potential_employer
-
-                    # Extract location and description from content after dates
-                    content_lines = [
-                        line.strip()
-                        for line in content_after.split("\n")[:20]
-                        if line.strip()
+                    # Parse location and description from after_text
+                    after_lines = [
+                        line.strip() for line in after_text.split("\n") if line.strip()
                     ]
 
-                    # First line after dates often contains location
-                    if content_lines:
-                        first_line = content_lines[0]
-                        # Check if it looks like a location
-                        if any(
-                            word in first_line
-                            for word in [
-                                "Netherlands",
-                                "Holland",
-                                "Amsterdam",
-                                "Utrecht",
-                            ]
+                    if after_lines:
+                        # Skip duration in parentheses if present
+                        if after_lines and re.match(
+                            r"^\(?\d+\s+(year|month)", after_lines[0], re.IGNORECASE
                         ):
-                            location_parts = first_line.split(",")
+                            after_lines = after_lines[1:]
+
+                        # Next line might be location
+                        if after_lines and (
+                            "," in after_lines[0]
+                            or any(
+                                place in after_lines[0]
+                                for place in [
+                                    "Netherlands",
+                                    "Holland",
+                                    "Germany",
+                                    "Belgium",
+                                    "London",
+                                    "New York",
+                                    "Amersfoort",
+                                    "Utrecht",
+                                    "Roosendaal",
+                                    "Baarn",
+                                    "Hilversum",
+                                    "Capelle",
+                                    "Gorinchem",
+                                ]
+                            )
+                        ):
+                            location_parts = after_lines[0].split(",")
                             if len(location_parts) >= 2:
                                 exp.city = location_parts[0].strip()
                                 exp.country = location_parts[-1].strip()
-                            content_lines = content_lines[
-                                1:
-                            ]  # Remove location from description
+                            after_lines = after_lines[1:]
 
-                    # Remaining lines are description/activities
-                    if content_lines:
-                        exp.description = "\n".join(
-                            content_lines[:10]
-                        )  # Limit to first 10 lines
+                        # Remaining is description
+                        description_lines = []
+                        for line in after_lines:
+                            # Stop at page markers or next company
+                            if re.search(r"^page\s+\d+", line, re.IGNORECASE):
+                                break
+                            description_lines.append(line)
 
-                    experiences.append(exp)
-                    i += 4  # Skip the processed parts
-                    continue
+                        if description_lines:
+                            exp.description = "\n".join(description_lines[:20])
 
-            i += 1
+                    if exp.position or exp.description:
+                        experiences.append(exp)
 
-        # Fallback: if no structured entries found, create one with all text
+                    i += 4
+                else:
+                    i += 1
+
+        return (
+            experiences if experiences else self._extract_work_experience_fallback(text)
+        )
+
+    def _extract_work_experience_fallback(self, text: str) -> list[WorkExperience]:
+        """Fallback work experience extraction when company blocks aren't found."""
+        experiences = []
+
+        date_range_pattern = r"((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)"
+        parts = re.split(date_range_pattern, text, flags=re.IGNORECASE)
+
+        i = 0
+        while i + 3 < len(parts):
+            before_text = parts[i].strip()
+            start_date_str = parts[i + 1].strip()
+            end_date_str = parts[i + 2].strip()
+
+            if len(before_text) < 10:
+                i += 1
+                continue
+
+            exp = WorkExperience()
+            exp.start_date = self._parse_date(start_date_str)
+            exp.current = end_date_str.lower() == "present"
+            exp.end_date = None if exp.current else self._parse_date(end_date_str)
+
+            lines_before = [
+                line.strip() for line in before_text.split("\n") if line.strip()
+            ]
+            if lines_before:
+                exp.position = lines_before[-1]
+                # Try to find employer
+                for line in lines_before[:-1]:
+                    if (
+                        len(line) > 3
+                        and not re.search(r"^\d+\s+(year|month)", line, re.IGNORECASE)
+                        and not re.search(r"^page\s+\d+", line, re.IGNORECASE)
+                    ):
+                        exp.employer = line
+                        break
+
+            if exp.position or exp.description:
+                experiences.append(exp)
+
+            i += 4
+
         if not experiences and text.strip():
-            exp = WorkExperience(description=text.strip()[:1000])
-            experiences.append(exp)
+            experiences.append(WorkExperience(description=text.strip()[:1000]))
 
         return experiences
 
@@ -935,8 +1232,16 @@ class LinkedInPDFExtractor(ResumeExtractor):
             "Nederlands",
         ]
 
-        # Proficiency level mappings to CEFR
+        # Proficiency level mappings to CEFR (LinkedIn-specific mappings added)
         proficiency_map = {
+            # LinkedIn proficiency levels
+            "native or bilingual": "C2",
+            "native or bilingual proficiency": "C2",
+            "full professional proficiency": "C1",
+            "professional working proficiency": "B2",
+            "limited working proficiency": "B1",
+            "elementary proficiency": "A2",
+            # Generic levels
             "native": "C2",
             "bilingual": "C2",
             "fluent": "C1",
@@ -954,34 +1259,88 @@ class LinkedInPDFExtractor(ResumeExtractor):
         # CEFR levels
         cefr_pattern = r"\b([A-C][1-2])\b"
 
-        for lang in language_names:
-            if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
-                language = Language(language=lang)
+        # LinkedIn format: "Language (Proficiency Level)"
+        linkedin_pattern = r"(\w+(?:\s+\w+)?)\s*\(([^)]+)\)"
+        linkedin_matches = re.finditer(linkedin_pattern, text)
 
-                # Find context around the language name (100 chars before and after)
-                lang_pos = text.lower().find(lang.lower())
-                if lang_pos >= 0:
-                    context = text[max(0, lang_pos - 100) : lang_pos + 150]
+        # Try LinkedIn-specific format first
+        for match in linkedin_matches:
+            lang_name = match.group(1).strip()
+            proficiency = match.group(2).strip()
 
-                    # Try to find CEFR level
-                    cefr_match = re.search(cefr_pattern, context)
-                    if cefr_match:
-                        level = cefr_match.group(1)
-                        language.listening = level
-                        language.reading = level
-                        language.speaking = level
-                        language.writing = level
-                    else:
-                        # Try to find proficiency description
-                        for prof_text, cefr_level in proficiency_map.items():
-                            if re.search(rf"\b{prof_text}\b", context, re.IGNORECASE):
-                                language.listening = cefr_level
-                                language.reading = cefr_level
-                                language.speaking = cefr_level
-                                language.writing = cefr_level
-                                break
+            # Check if it's a known language
+            if any(
+                lang.lower() == lang_name.lower() or lang.lower() in lang_name.lower()
+                for lang in language_names
+            ):
+                # Normalize language name to match our list
+                normalized_lang = next(
+                    (
+                        lang
+                        for lang in language_names
+                        if lang.lower() == lang_name.lower()
+                        or lang.lower() in lang_name.lower()
+                    ),
+                    lang_name,
+                )
+
+                language = Language(language=normalized_lang)
+
+                # Map proficiency to CEFR
+                prof_lower = proficiency.lower()
+                cefr_level = None
+
+                # Try direct CEFR match
+                cefr_match = re.search(cefr_pattern, proficiency)
+                if cefr_match:
+                    cefr_level = cefr_match.group(1)
+                else:
+                    # Try proficiency mapping
+                    for prof_text, level in proficiency_map.items():
+                        if prof_text in prof_lower:
+                            cefr_level = level
+                            break
+
+                if cefr_level:
+                    language.listening = cefr_level
+                    language.reading = cefr_level
+                    language.speaking = cefr_level
+                    language.writing = cefr_level
 
                 languages.append(language)
+
+        # Fallback: try generic language detection if no LinkedIn format found
+        if not languages:
+            for lang in language_names:
+                if re.search(rf"\b{lang}\b", text, re.IGNORECASE):
+                    language = Language(language=lang)
+
+                    # Find context around the language name (100 chars before and after)
+                    lang_pos = text.lower().find(lang.lower())
+                    if lang_pos >= 0:
+                        context = text[max(0, lang_pos - 100) : lang_pos + 150]
+
+                        # Try to find CEFR level
+                        cefr_match = re.search(cefr_pattern, context)
+                        if cefr_match:
+                            level = cefr_match.group(1)
+                            language.listening = level
+                            language.reading = level
+                            language.speaking = level
+                            language.writing = level
+                        else:
+                            # Try to find proficiency description
+                            for prof_text, cefr_level in proficiency_map.items():
+                                if re.search(
+                                    rf"\b{prof_text}\b", context, re.IGNORECASE
+                                ):
+                                    language.listening = cefr_level
+                                    language.reading = cefr_level
+                                    language.speaking = cefr_level
+                                    language.writing = cefr_level
+                                    break
+
+                    languages.append(language)
 
         return languages
 
