@@ -255,3 +255,33 @@ def test_404_handler(client):
     response = client.get("/nonexistent")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+def test_schema_endpoint(client):
+    """Test /schema endpoint returns JSON Schema."""
+    response = client.get("/schema")
+    assert response.status_code == 200
+
+    schema = response.json()
+    assert schema is not None
+    assert isinstance(schema, dict)
+
+    # Check schema structure
+    assert "properties" in schema
+    assert "DocumentInfo" in schema["properties"]
+    assert "LearnerInfo" in schema["properties"]
+
+    # Check that it's a valid JSON Schema
+    assert "$defs" in schema or "definitions" in schema
+    assert "required" in schema
+
+
+def test_info_endpoint_includes_schema(client):
+    """Test /info endpoint includes /schema in endpoints list."""
+    response = client.get("/info")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "endpoints" in data
+    assert "schema" in data["endpoints"]
+    assert data["endpoints"]["schema"] == "/schema"
