@@ -72,6 +72,12 @@ class EuropassMapper:
         if skills:
             learner_info["Skills"] = skills
 
+        # Certifications (map to Achievement)
+        if resume.certifications:
+            learner_info["Achievement"] = [
+                self._map_certification(cert) for cert in resume.certifications
+            ]
+
         europass.LearnerInfo = learner_info
 
         return europass
@@ -134,12 +140,13 @@ class EuropassMapper:
         # Demographics
         demographics = {}
         if pi.date_of_birth:
-            # Europass format for dates
-            demographics["Birthdate"] = {
-                "Year": pi.date_of_birth.year,
-                "Month": f"--{pi.date_of_birth.month:02d}",
-                "Day": f"---{pi.date_of_birth.day:02d}",
-            }
+            # Clean integer format for JSON
+            birthdate: dict[str, Any] = {"Year": pi.date_of_birth.year}
+            if pi.date_of_birth.month:
+                birthdate["Month"] = pi.date_of_birth.month
+            if pi.date_of_birth.day and pi.date_of_birth.day != 1:
+                birthdate["Day"] = pi.date_of_birth.day
+            demographics["Birthdate"] = birthdate
 
         if pi.nationality:
             demographics["Nationality"] = [
@@ -170,21 +177,25 @@ class EuropassMapper:
         """
         work_exp: dict[str, Any] = {}
 
-        # Period (using proper Europass date format)
+        # Period (using clean integer format for JSON)
         period: dict[str, Any] = {}
         if exp.start_date:
-            period["From"] = {
-                "Year": exp.start_date.year,
-                "Month": f"--{exp.start_date.month:02d}",  # Europass format: --MM
-                "Day": f"---{exp.start_date.day:02d}",  # Europass format: ---DD
-            }
+            from_date: dict[str, Any] = {"Year": exp.start_date.year}
+            # Only include month if we have meaningful month data (not just default day 1)
+            if exp.start_date.month:
+                from_date["Month"] = exp.start_date.month
+            # Only include day if it's meaningful (not just default day 1 from month-only data)
+            if exp.start_date.day and exp.start_date.day != 1:
+                from_date["Day"] = exp.start_date.day
+            period["From"] = from_date
 
         if exp.end_date:
-            period["To"] = {
-                "Year": exp.end_date.year,
-                "Month": f"--{exp.end_date.month:02d}",
-                "Day": f"---{exp.end_date.day:02d}",
-            }
+            to_date: dict[str, Any] = {"Year": exp.end_date.year}
+            if exp.end_date.month:
+                to_date["Month"] = exp.end_date.month
+            if exp.end_date.day and exp.end_date.day != 1:
+                to_date["Day"] = exp.end_date.day
+            period["To"] = to_date
         elif exp.current:
             period["Current"] = True
 
@@ -241,21 +252,23 @@ class EuropassMapper:
         """
         education: dict[str, Any] = {}
 
-        # Period (using proper Europass date format)
+        # Period (using clean integer format for JSON)
         period: dict[str, Any] = {}
         if edu.start_date:
-            period["From"] = {
-                "Year": edu.start_date.year,
-                "Month": f"--{edu.start_date.month:02d}",
-                "Day": f"---{edu.start_date.day:02d}",
-            }
+            from_date: dict[str, Any] = {"Year": edu.start_date.year}
+            if edu.start_date.month:
+                from_date["Month"] = edu.start_date.month
+            if edu.start_date.day and edu.start_date.day != 1:
+                from_date["Day"] = edu.start_date.day
+            period["From"] = from_date
 
         if edu.end_date:
-            period["To"] = {
-                "Year": edu.end_date.year,
-                "Month": f"--{edu.end_date.month:02d}",
-                "Day": f"---{edu.end_date.day:02d}",
-            }
+            to_date: dict[str, Any] = {"Year": edu.end_date.year}
+            if edu.end_date.month:
+                to_date["Month"] = edu.end_date.month
+            if edu.end_date.day and edu.end_date.day != 1:
+                to_date["Day"] = edu.end_date.day
+            period["To"] = to_date
         elif edu.current:
             period["Current"] = True
 
@@ -308,6 +321,35 @@ class EuropassMapper:
                 education["Level"] = level
 
         return education
+
+    def _map_certification(self, cert: Any) -> dict[str, Any]:
+        """Map certification to Europass Achievement format.
+
+        Args:
+            cert: Certification object
+
+        Returns:
+            Europass achievement dict
+        """
+        achievement: dict[str, Any] = {}
+
+        # Title
+        if cert.name:
+            achievement["Title"] = {"Label": cert.name}
+
+        # Date (if available)
+        if cert.date:
+            achievement["Date"] = {"Year": cert.date.year}
+            if cert.date.month:
+                achievement["Date"]["Month"] = cert.date.month
+            if cert.date.day and cert.date.day != 1:
+                achievement["Date"]["Day"] = cert.date.day
+
+        # Issuer (if available)
+        if hasattr(cert, "issuer") and cert.issuer:
+            achievement["IssuedBy"] = cert.issuer
+
+        return achievement
 
     def _map_skills(self, resume: Resume) -> Optional[dict[str, Any]]:
         """Map skills to Europass format.
