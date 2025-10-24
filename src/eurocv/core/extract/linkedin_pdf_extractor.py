@@ -800,6 +800,47 @@ class LinkedInPDFExtractor(ResumeExtractor):
 
         return sections
 
+    def _looks_like_location(self, text: str) -> bool:
+        """Check if a line of text looks like a location.
+
+        Args:
+            text: Text to check
+
+        Returns:
+            True if text appears to be a location
+        """
+        # Check for comma (typical location format: "City, Country")
+        if "," in text:
+            return True
+
+        # Check for known location keywords
+        location_keywords = [
+            "Netherlands",
+            "Holland",
+            "Germany",
+            "Belgium",
+            "France",
+            "UK",
+            "United Kingdom",
+            "USA",
+            "United States",
+            "London",
+            "New York",
+            "Amsterdam",
+            "Rotterdam",
+            "Utrecht",
+            "Amersfoort",
+            "Roosendaal",
+            "Baarn",
+            "Hilversum",
+            "Capelle",
+            "Gorinchem",
+            "Area",
+            "Region",
+        ]
+
+        return any(keyword in text for keyword in location_keywords)
+
     def _extract_work_experience(self, text: str) -> list[WorkExperience]:
         """Extract work experience entries from LinkedIn format.
 
@@ -823,7 +864,7 @@ class LinkedInPDFExtractor(ResumeExtractor):
         """
         experiences = []
 
-        # First, identify company blocks by finding duration summary lines
+        # Step 1: Identify company blocks by finding duration summary lines
         # Pattern: "X years Y months" or "X years" or "Y months" on their own line
         duration_summary_pattern = r"^\d+\s+(?:year|years)\s+\d+\s+(?:month|months)$|^\d+\s+(?:year|years)$|^\d+\s+(?:month|months)$"
 
@@ -881,113 +922,130 @@ class LinkedInPDFExtractor(ResumeExtractor):
         if not company_blocks:
             return self._extract_work_experience_fallback(text)
 
-        # Now extract positions from each company block
+        # Step 2: For each company block, use re.finditer() to find all date ranges
         date_range_pattern = r"((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4})\s*[-–—]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{4}|Present)"
 
         for block in company_blocks:
             company_name: str = block["company"]  # type: ignore[assignment]
             block_text: str = block["text"]  # type: ignore[assignment]
 
-            # Split this company's block by date ranges to find individual positions
-            parts = re.split(date_range_pattern, block_text, 0, re.IGNORECASE)
+            # Find all date range matches with their positions
+            date_matches = list(
+                re.finditer(date_range_pattern, block_text, re.IGNORECASE)
+            )
 
-            i = 0
-            while i < len(parts):
-                if i + 3 < len(parts):
-                    before_text = parts[i].strip()
-                    start_date_str = parts[i + 1].strip()
-                    end_date_str = parts[i + 2].strip()
-                    after_text = parts[i + 3].strip()
+            if not date_matches:
+                continue
 
-                    # Skip if too short
-                    if len(before_text) < 5:
-                        i += 1
-                        continue
+            # Step 3: Process each date range match sequentially
+            for i, match in enumerate(date_matches):
+                exp = WorkExperience()
+                exp.employer = company_name
 
-                    exp = WorkExperience()
-                    exp.employer = company_name  # Use the identified company name
-
-                    # Parse dates
-                    exp.start_date = self._parse_date(start_date_str)
-                    if end_date_str.lower() == "present":
-                        exp.current = True
-                        exp.end_date = None
-                    else:
-                        exp.end_date = self._parse_date(end_date_str)
-
-                    # Extract position title (last line before date range)
-                    lines_before = [
-                        line.strip() for line in before_text.split("\n") if line.strip()
-                    ]
-                    if lines_before:
-                        # Skip duration lines
-                        position_candidates = [
-                            line
-                            for line in lines_before
-                            if not re.match(
-                                r"^\(?\d+\s+(year|month)", line, re.IGNORECASE
-                            )
-                        ]
-                        if position_candidates:
-                            exp.position = position_candidates[-1]
-
-                    # Parse location and description from after_text
-                    after_lines = [
-                        line.strip() for line in after_text.split("\n") if line.strip()
-                    ]
-
-                    if after_lines:
-                        # Skip duration in parentheses if present
-                        if after_lines and re.match(
-                            r"^\(?\d+\s+(year|month)", after_lines[0], re.IGNORECASE
-                        ):
-                            after_lines = after_lines[1:]
-
-                        # Next line might be location
-                        if after_lines and (
-                            "," in after_lines[0]
-                            or any(
-                                place in after_lines[0]
-                                for place in [
-                                    "Netherlands",
-                                    "Holland",
-                                    "Germany",
-                                    "Belgium",
-                                    "London",
-                                    "New York",
-                                    "Amersfoort",
-                                    "Utrecht",
-                                    "Roosendaal",
-                                    "Baarn",
-                                    "Hilversum",
-                                    "Capelle",
-                                    "Gorinchem",
-                                ]
-                            )
-                        ):
-                            location_parts = after_lines[0].split(",")
-                            if len(location_parts) >= 2:
-                                exp.city = location_parts[0].strip()
-                                exp.country = location_parts[-1].strip()
-                            after_lines = after_lines[1:]
-
-                        # Remaining is description
-                        description_lines = []
-                        for line in after_lines:
-                            # Stop at page markers or next company
-                            if re.search(r"^page\s+\d+", line, re.IGNORECASE):
-                                break
-                            description_lines.append(line)
-
-                        if description_lines:
-                            exp.description = "\n".join(description_lines[:20])
-
-                    if exp.position or exp.description:
-                        experiences.append(exp)
-
-                    i += 4
+                # Extract dates from match groups
+                start_date_str = match.group(1)
+                end_date_str = match.group(2)
+                exp.start_date = self._parse_date(start_date_str)
+                if end_date_str.lower() == "present":
+                    exp.current = True
+                    exp.end_date = None
                 else:
-                    i += 1
+                    exp.end_date = self._parse_date(end_date_str)
+
+                # Get text before this date range (from end of previous match or start of block)
+                if i == 0:
+                    before_start = 0
+                else:
+                    before_start = date_matches[i - 1].end()
+                before_text = block_text[before_start : match.start()]
+
+                # Get text after this date range (until start of next match or end of block)
+                after_start = match.end()
+                if i + 1 < len(date_matches):
+                    after_end = date_matches[i + 1].start()
+                else:
+                    after_end = len(block_text)
+                after_text = block_text[after_start:after_end]
+
+                # Extract position title: last non-empty line before date
+                before_lines = [
+                    line.strip() for line in before_text.split("\n") if line.strip()
+                ]
+                if before_lines:
+                    # Skip duration lines in parentheses
+                    position_candidates = [
+                        line
+                        for line in before_lines
+                        if not re.match(r"^\(?\d+\s+(year|month)", line, re.IGNORECASE)
+                    ]
+                    if position_candidates:
+                        exp.position = position_candidates[-1]
+
+                # Extract location and description from after_text
+                after_lines = [
+                    line.strip() for line in after_text.split("\n") if line.strip()
+                ]
+
+                if after_lines:
+                    # Skip duration in parentheses if present (e.g., "(2 years 7 months)")
+                    if re.match(r"^\(.*?\)$", after_lines[0]):
+                        after_lines = after_lines[1:]
+
+                    # Check if first line is a location
+                    if after_lines and self._looks_like_location(after_lines[0]):
+                        location_line = after_lines[0]
+                        location_parts = location_line.split(",")
+
+                        if len(location_parts) >= 2:
+                            # Format: "City, Country" or "City, Region, Country"
+                            exp.city = location_parts[0].strip()
+                            exp.country = location_parts[-1].strip()
+                        else:
+                            # Single location word - check if it's a known country
+                            country_keywords = [
+                                "Netherlands",
+                                "Holland",
+                                "Germany",
+                                "Belgium",
+                                "France",
+                                "UK",
+                                "United Kingdom",
+                                "USA",
+                                "United States",
+                                "Spain",
+                                "Italy",
+                                "Portugal",
+                                "Poland",
+                                "Sweden",
+                                "Denmark",
+                                "Austria",
+                                "Switzerland",
+                                "Ireland",
+                                "Canada",
+                                "Australia",
+                            ]
+                            for keyword in country_keywords:
+                                if keyword.lower() in location_line.lower():
+                                    exp.country = keyword
+                                    break
+
+                        # Only remove the line after we've processed it
+                        after_lines = after_lines[1:]
+
+                    # Remaining lines are description
+                    description_lines = []
+                    for line in after_lines:
+                        # Stop at page markers
+                        if re.match(r"^page\s+\d+\s+of\s+\d+", line, re.IGNORECASE):
+                            break
+                        description_lines.append(line)
+
+                    if description_lines:
+                        exp.description = "\n".join(description_lines[:20])
+
+                # Only add if we have at least a position or description
+                if exp.position or exp.description:
+                    experiences.append(exp)
 
         return (
             experiences if experiences else self._extract_work_experience_fallback(text)
