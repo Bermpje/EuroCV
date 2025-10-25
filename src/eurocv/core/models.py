@@ -138,7 +138,11 @@ class EuropassSkills(BaseModel):
 
 
 class EuropassCV(BaseModel):
-    """Europass CV model (simplified)."""
+    """Europass CV model with full type support.
+
+    This model uses the complete Europass v3.4 schema types for
+    proper validation and API documentation.
+    """
 
     DocumentInfo: dict[str, Any] = Field(default_factory=dict)
     LearnerInfo: dict[str, Any] = Field(default_factory=dict)

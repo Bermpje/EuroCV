@@ -101,6 +101,65 @@ async def convert(
     - **xml**: Europass XML string (if output_format is xml or both)
     - **validation_errors**: List of validation errors/warnings
     - **message**: Status message
+
+    Example Response (JSON format):
+    ```json
+    {
+      "success": true,
+      "data": {
+        "DocumentInfo": {
+          "DocumentType": "Europass CV",
+          "CreationDate": "2025-10-25T00:00:00",
+          "Generator": "EuroCV",
+          "XSDVersion": "V3.4"
+        },
+        "LearnerInfo": {
+          "Identification": {
+            "PersonName": {
+              "FirstName": "John",
+              "Surname": "Doe"
+            },
+            "ContactInfo": {
+              "Email": {"Contact": "john.doe@example.com"},
+              "Address": {
+                "Contact": {
+                  "Municipality": "Amsterdam",
+                  "Country": {"Code": "NL", "Label": "Netherlands"}
+                }
+              }
+            }
+          },
+          "WorkExperience": [
+            {
+              "Period": {
+                "From": {"Year": 2020, "Month": 1, "Day": 1},
+                "Current": true
+              },
+              "Position": {"Label": "Software Engineer"},
+              "Activities": "Developing web applications using modern technologies",
+              "Employer": {
+                "Name": "Tech Corp",
+                "ContactInfo": {
+                  "Address": {
+                    "Contact": {
+                      "Municipality": "Amsterdam",
+                      "Country": {"Code": "NL", "Label": "Netherlands"}
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "Education": [...],
+          "Skills": {...}
+        }
+      },
+      "validation_errors": [],
+      "message": "Conversion successful"
+    }
+    ```
+
+    For complete schema documentation, see the `/schema` endpoint.
     """
     # Validate file type
     if not file.filename:
@@ -216,10 +275,44 @@ async def info() -> dict[str, Any]:
         "endpoints": {
             "convert": "/convert",
             "validate": "/validate",
+            "schema": "/schema",
             "health": "/healthz",
             "docs": "/docs",
         },
     }
+
+
+@app.get("/schema")
+async def get_schema() -> dict[str, Any]:
+    """Get the JSON Schema for Europass CV response format.
+
+    Returns the complete JSON Schema that describes the structure
+    of the Europass CV data returned by the /convert endpoint.
+
+    This schema can be used for:
+    - **Client code generation** (TypeScript, Python, Go, etc.)
+    - **Response validation** (ensure data matches expected structure)
+    - **Documentation** (understand the exact data format)
+    - **IDE autocomplete** (type-safe development)
+
+    Example Usage:
+    ```bash
+    # Download schema
+    curl http://localhost:8000/schema > europass-schema.json
+
+    # Generate TypeScript types
+    npx quicktype europass-schema.json -o europass.ts
+
+    # Generate Python types
+    datamodel-codegen --input europass-schema.json --output europass_types.py
+    ```
+
+    Returns:
+        JSON Schema object describing the Europass CV structure
+    """
+    from eurocv.core.europass_schema import EuropassCVResponse
+
+    return EuropassCVResponse.model_json_schema()
 
 
 # Error handlers

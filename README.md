@@ -125,8 +125,57 @@ curl -X POST http://localhost:8000/validate \
   -H "Content-Type: application/json" \
   -d @europass.json
 
+# Get Europass JSON Schema
+curl http://localhost:8000/schema > europass-schema.json
+
 # Health check
 curl http://localhost:8000/healthz
+
+# Interactive API docs
+open http://localhost:8000/docs
+```
+
+### API Schema & Type Generation
+
+The API provides a fully-typed JSON Schema for the Europass CV format. Use this for client code generation:
+
+```bash
+# Download the schema
+curl http://localhost:8000/schema > europass-schema.json
+
+# Generate TypeScript types
+npx quicktype europass-schema.json -o europass.ts
+
+# Generate Python types
+datamodel-codegen --input europass-schema.json --output europass_types.py
+
+# Generate Go types
+quicktype europass-schema.json -o europass.go --lang go
+
+# Generate Java classes
+json schema2pojo --source europass-schema.json --target java-gen/
+```
+
+**Benefits:**
+- **Type-safe clients**: Auto-generate types for any language
+- **IDE autocomplete**: Full IntelliSense support
+- **Validation**: Validate responses against official schema
+- **Documentation**: Self-describing API
+
+**Example TypeScript usage:**
+```typescript
+import { EuropassCVResponse } from './europass';
+
+async function convertResume(file: File): Promise<EuropassCVResponse> {
+  const response = await fetch('http://localhost:8000/convert', {
+    method: 'POST',
+    body: formData
+  });
+  return await response.json(); // Fully typed!
+}
+
+// IDE knows all fields:
+const firstName = result.data.LearnerInfo.Identification.PersonName.FirstName;
 ```
 
 ## Architecture
