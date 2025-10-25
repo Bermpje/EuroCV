@@ -977,7 +977,27 @@ class LinkedInPDFExtractor(ResumeExtractor):
 
             # Get text before this date (from end of previous match or start of text)
             before_start = date_matches[i - 1].end() if i > 0 else 0
-            before_text = text[before_start : match.start()]
+            before_text_full = text[before_start : match.start()]
+
+            # For positions after the first, before_text_full contains the previous position's
+            # location and description. Extract only the last few lines (company + position)
+            # to avoid contamination from previous position's content.
+            if i > 0:
+                # Take only the last 5 lines before the date, which should contain
+                # company name and position title without previous description
+                lines_before = before_text_full.split("\n")
+                # Filter out empty lines
+                non_empty_lines = [line for line in lines_before if line.strip()]
+                # Take last 5 non-empty lines (generous buffer for company + position)
+                relevant_lines = (
+                    non_empty_lines[-5:]
+                    if len(non_empty_lines) > 5
+                    else non_empty_lines
+                )
+                before_text = "\n".join(relevant_lines)
+            else:
+                # First position: use all text before date
+                before_text = before_text_full
 
             # Extract company name AND position from before_text
             company, position = self._extract_company_and_position(
