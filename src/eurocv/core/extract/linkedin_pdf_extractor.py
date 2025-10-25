@@ -912,7 +912,17 @@ class LinkedInPDFExtractor(ResumeExtractor):
         if not lines:
             return fallback_company or "Unknown", ""
 
-        # Last line is likely the position
+        # Handle single line case - could be company OR position
+        if len(lines) == 1:
+            single_line = lines[0]
+            if self._looks_like_company_name(single_line):
+                # It's a company name, position is unknown/empty
+                return single_line, ""
+            else:
+                # It's a position, use fallback company
+                return fallback_company or "Unknown", single_line
+
+        # Multiple lines: last line is likely the position
         position = lines[-1]
 
         # Company name: look for title-case or mixed-case line before position
