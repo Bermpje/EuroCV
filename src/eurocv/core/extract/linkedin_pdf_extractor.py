@@ -975,7 +975,9 @@ class LinkedInPDFExtractor(ResumeExtractor):
             )
             exp.employer = company
             exp.position = position
-            previous_company = company  # Remember for next iteration
+            # Only update previous_company if we found a real company name
+            if company != "Unknown":
+                previous_company = company
 
             # Get text after this date (until start of next match or end of text)
             after_start = match.end()
